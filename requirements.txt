@@ -1,0 +1,5 @@
+pypdf
+scikit-learn
+numpy
+pytest
+openai

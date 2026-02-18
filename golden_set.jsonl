@@ -1,0 +1,51 @@
+{"id": 1, "question": "What is current good manufacturing practice (cGMP) in 21 CFR Part 210 and 211?", "expected_not_found": false}
+{"id": 2, "question": "What is the scope difference between 21 CFR Part 210 and 21 CFR Part 211?", "expected_not_found": false}
+{"id": 3, "question": "What is an electronic signature under 21 CFR Part 11?", "expected_not_found": false}
+{"id": 4, "question": "What is data integrity as described in FDA Data Integrity guidance?", "expected_not_found": false}
+{"id": 5, "question": "What is the purpose of EU GMP Annex 11 (Computerised Systems)?", "expected_not_found": false}
+{"id": 6, "question": "What is the purpose of EU GMP Annex 15 (Qualification and Validation)?", "expected_not_found": false}
+{"id": 7, "question": "What is the purpose of ICH Q10 (Pharmaceutical Quality System)?", "expected_not_found": false}
+{"id": 8, "question": "What is Quality Risk Management according to ICH Q9 (R1)?", "expected_not_found": false}
+{"id": 9, "question": "What is process validation according to FDA Process Validation guidance?", "expected_not_found": false}
+{"id": 10, "question": "What is continuous manufacturing according to ICH Q13?", "expected_not_found": false}
+{"id": 11, "question": "Under 21 CFR 211, who is responsible for the quality control unit and what are its responsibilities?", "expected_not_found": false}
+{"id": 12, "question": "Under 21 CFR 211, what are the requirements for written procedures and handling deviations?", "expected_not_found": false}
+{"id": 13, "question": "Under EU GMP Annex 16, what are the responsibilities of the Qualified Person (QP)?", "expected_not_found": false}
+{"id": 14, "question": "Under EU GMP Part I, what are the expectations for batch documentation?", "expected_not_found": false}
+{"id": 15, "question": "Under EU GMP Annex 11, what are the requirements for access control and user management?", "expected_not_found": false}
+{"id": 16, "question": "Under EU GMP Annex 11, what are the expectations for audit trails?", "expected_not_found": false}
+{"id": 17, "question": "Under ICH Q10, what management responsibilities are defined for a pharmaceutical quality system?", "expected_not_found": false}
+{"id": 18, "question": "Under ICH Q7, what are the expectations for change control for APIs?", "expected_not_found": false}
+{"id": 19, "question": "Under PIC/S Guide to GMP (PE 009), what is expected regarding self-inspection?", "expected_not_found": false}
+{"id": 20, "question": "Under WHO Good Distribution Practices, what are key responsibilities for distribution controls?", "expected_not_found": false}
+{"id": 21, "question": "What are the stages of process validation described in FDA Process Validation guidance?", "expected_not_found": false}
+{"id": 22, "question": "What triggers process revalidation according to FDA Process Validation guidance?", "expected_not_found": false}
+{"id": 23, "question": "Under EU GMP Annex 15, what are the typical elements of a Validation Master Plan?", "expected_not_found": false}
+{"id": 24, "question": "Under EU GMP Annex 15, what are the expectations for equipment qualification (DQ, IQ, OQ, PQ)?", "expected_not_found": false}
+{"id": 25, "question": "Under FDA Cleaning Validation guidance, how should acceptance criteria be established?", "expected_not_found": false}
+{"id": 26, "question": "Under ICH Q2 (R2), what validation characteristics apply to an assay method?", "expected_not_found": false}
+{"id": 27, "question": "What is the purpose of ICH Q14 on analytical procedure development?", "expected_not_found": false}
+{"id": 28, "question": "Under FDA Analytical Procedures and Methods Validation guidance, what documentation is expected for method validation?", "expected_not_found": false}
+{"id": 29, "question": "Under EU GMP Annex 1, what is a contamination control strategy?", "expected_not_found": false}
+{"id": 30, "question": "Under EU GMP Annex 1, what are the expectations for environmental monitoring?", "expected_not_found": false}
+{"id": 31, "question": "What common data integrity principles are shared across FDA, MHRA, PIC/S, and WHO guidance?", "expected_not_found": false}
+{"id": 32, "question": "What does MHRA data integrity guidance state about data governance?", "expected_not_found": false}
+{"id": 33, "question": "What are the common expectations for audit trail review across regulatory guidance documents?", "expected_not_found": false}
+{"id": 34, "question": "What are the expectations for managing shared accounts and passwords under Annex 11 and data integrity guidance?", "expected_not_found": false}
+{"id": 35, "question": "Under EU GMP Annex 11, what are the requirements for backup, restore, and disaster recovery?", "expected_not_found": false}
+{"id": 36, "question": "Under 21 CFR Part 11, what controls are required for system access and authority checks?", "expected_not_found": false}
+{"id": 37, "question": "Under 21 CFR Part 11, what are the requirements for record retention and retrieval?", "expected_not_found": false}
+{"id": 38, "question": "What does FDA Data Integrity guidance state about second-person review or review by exception?", "expected_not_found": false}
+{"id": 39, "question": "How should reprocessing or retesting data be handled according to OOS and data integrity guidance?", "expected_not_found": false}
+{"id": 40, "question": "What does PIC/S data integrity guidance state about hybrid systems combining paper and electronic records?", "expected_not_found": false}
+{"id": 41, "question": "Do FDA Process Validation guidance and EU GMP Annex 15 describe similar lifecycle validation concepts?", "expected_not_found": false}
+{"id": 42, "question": "Do FDA and MHRA data integrity guidance documents differ in terminology or emphasis?", "expected_not_found": false}
+{"id": 43, "question": "What overlaps and differences exist between EU GMP Annex 11 and 21 CFR Part 11?", "expected_not_found": false}
+{"id": 44, "question": "Are supplier qualification expectations described in both FDA guidance and ICH Q10 or Q7?", "expected_not_found": false}
+{"id": 45, "question": "How do sterile manufacturing expectations compare between FDA Aseptic Processing guidance and EU GMP Annex 1?", "expected_not_found": false}
+{"id": 46, "question": "What is the current FDA inspection failure rate for data integrity in 2025?", "expected_not_found": true}
+{"id": 47, "question": "What is the average cost of implementing EU GMP Annex 11 compliance?", "expected_not_found": true}
+{"id": 48, "question": "Who is the current head of EMA GMP inspections?", "expected_not_found": true}
+{"id": 49, "question": "What is the market share of PIC/S member countries?", "expected_not_found": true}
+{"id": 50, "question": "How many warning letters were issued last month specifically for OOS issues?", "expected_not_found": true}
+{"id": 51, "question": "What does GMP require for validation?", "expected_not_found": false, "phase_a_require_authorities_when_eligible": ["EU_GMP", "FDA"]}

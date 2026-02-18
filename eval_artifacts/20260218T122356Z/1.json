@@ -1,0 +1,54 @@
+{
+  "question": "What does GMP require for validation?",
+  "expected_not_found": false,
+  "outcome": "pass",
+  "phase_a": {
+    "queries_used": [],
+    "thresholds_attempted": [],
+    "attempts": [
+      {
+        "min_similarity": 0.2,
+        "top_results": [
+          {
+            "authority": "FDA",
+            "score": 0.45
+          },
+          {
+            "authority": "EU_GMP",
+            "score": 0.43
+          },
+          {
+            "authority": "ICH",
+            "score": 0.41
+          }
+        ]
+      }
+    ],
+    "fallback_used": false,
+    "balancing": {
+      "soft_floor_score": 0.4,
+      "authorities_kept": [
+        "FDA"
+      ]
+    }
+  },
+  "phase_b": {
+    "relevant_facts_kept": []
+  },
+  "phase_c": {
+    "answer_sentences": [],
+    "citations": [
+      {
+        "pdf": "x.pdf",
+        "page": 1,
+        "chunk_id": "p1_c1"
+      }
+    ]
+  },
+  "validator": {
+    "ok": false,
+    "reasons": [
+      "phase_a_balance_missing:EU_GMP"
+    ]
+  }
+}

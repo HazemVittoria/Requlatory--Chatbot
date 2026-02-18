@@ -1,0 +1,32 @@
+{
+  "question": "q",
+  "expected_not_found": true,
+  "outcome": "hallucination",
+  "phase_a": {
+    "queries_used": [],
+    "thresholds_attempted": [],
+    "attempts": [],
+    "fallback_used": false,
+    "balancing": {}
+  },
+  "phase_b": {
+    "relevant_facts_kept": []
+  },
+  "phase_c": {
+    "answer_sentences": [],
+    "citations": [
+      {
+        "pdf": "x.pdf",
+        "page": 1,
+        "chunk_id": "p1_c1"
+      }
+    ]
+  },
+  "validator": {
+    "ok": false,
+    "reasons": [
+      "hallucination_expected_refusal",
+      "hallucination_with_citations"
+    ]
+  }
+}
