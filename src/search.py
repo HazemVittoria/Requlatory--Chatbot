@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import cmp_to_key
+import logging
 import pickle
 import re
 from pathlib import Path
@@ -53,6 +54,25 @@ _VECT_WORD: TfidfVectorizer | None = None
 _VECT_CHAR: TfidfVectorizer | None = None
 _X_WORD = None
 _X_CHAR = None
+_LOGGER = logging.getLogger(__name__)
+_EMPTY_RETRIEVAL_EVENTS: list[dict[str, Any]] = []
+_MAX_EMPTY_RETRIEVAL_EVENTS = 256
+
+
+def _record_empty_retrieval_event(event: dict[str, Any]) -> None:
+    _EMPTY_RETRIEVAL_EVENTS.append(event)
+    overflow = len(_EMPTY_RETRIEVAL_EVENTS) - _MAX_EMPTY_RETRIEVAL_EVENTS
+    if overflow > 0:
+        del _EMPTY_RETRIEVAL_EVENTS[:overflow]
+    _LOGGER.debug("phase_a_empty_retrieval=%s", event)
+
+
+def pop_empty_retrieval_events() -> list[dict[str, Any]]:
+    if not _EMPTY_RETRIEVAL_EVENTS:
+        return []
+    out = list(_EMPTY_RETRIEVAL_EVENTS)
+    _EMPTY_RETRIEVAL_EVENTS.clear()
+    return out
 
 
 _TOPIC_PROFILES: tuple[dict[str, Any], ...] = (
@@ -438,22 +458,47 @@ def search_chunks(
             allowed_doc_norm.add(ds)
             allowed_doc_norm.add(Path(ds).name.lower())
 
+    total_chunks = len(_CORPUS)
+    authority_pass_count = 0
+    docs_pass_count = 0
+    eligible_similarity_count = 0
     candidate_idx: list[int] = []
     for i in range(len(_CORPUS)):
         c = _CORPUS[i]
         authority = str(c.get("authority") or "OTHER")
         if authority not in allowed:
             continue
+        authority_pass_count += 1
         if allowed_doc_norm is not None:
             f = str(c.get("file") or "").strip().lower()
             if f not in allowed_doc_norm:
                 continue
+        docs_pass_count += 1
         # Threshold invariance: eligibility is based on pre-boost score only.
         if float(base_rank_scores[i]) < float(min_similarity):
             continue
+        eligible_similarity_count += 1
         candidate_idx.append(i)
 
     if not candidate_idx:
+        scope_filtered_count = max(0, total_chunks - authority_pass_count)
+        doc_filter_removed_count = max(0, authority_pass_count - docs_pass_count)
+        similarity_filtered_count = max(0, docs_pass_count - eligible_similarity_count)
+        _record_empty_retrieval_event(
+            {
+                "query_used": q_aug,
+                "scope_used": str(scope or "MIXED"),
+                "anchor_terms_used": list(anchors),
+                "candidate_chunks_considered": int(docs_pass_count),
+                "authority_pass_count": int(authority_pass_count),
+                "scope_filter_removed_count": int(scope_filtered_count),
+                "scope_filter_removed_any": bool(scope_filtered_count > 0),
+                "allowed_docs_filter_active": bool(allowed_doc_norm is not None),
+                "allowed_docs_filter_removed_count": int(doc_filter_removed_count),
+                "similarity_filtered_count": int(similarity_filtered_count),
+                "min_similarity": float(min_similarity),
+            }
+        )
         return []
 
     ranked_candidates = _rank_candidates_with_guardrail(

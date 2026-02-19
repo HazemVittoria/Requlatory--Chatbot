@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
 import os
 import re
 from functools import cmp_to_key
 from pathlib import Path
 
+from .domain_lexicons import DOMAIN_LEXICONS
 from .doc_router import route_docs
 from .phase_llm import (
     LLMPhaseRunner,
@@ -16,13 +18,16 @@ from .phase_llm import (
 )
 from .query_normalization import expand_query, normalize_text
 from .qa_types import AnswerResult, Citation, Fact
+from . import search as search_module
 from .search import search_chunks
 
 _TOKEN_RE = re.compile(r"[a-zA-Z]{3,}")
 _SENT_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+_LOGGER = logging.getLogger(__name__)
 
 RETRIEVAL_TOP_K = 8
-MAX_CONTEXT_CHUNKS = 6
+MAX_CONTEXT_CHUNKS = 8
+MIN_CONTEXT_CHUNKS = 2
 MIN_SIMILARITY = 0.20
 FALLBACK_MIN_SIMILARITY = 0.18
 FALLBACK_ONLY_IF_EMPTY = True
@@ -36,6 +41,7 @@ DETERMINISTIC_PHASE_C_MAX_FACTS = 5
 DETERMINISTIC_PHASE_C_MIN_SENTENCES = 3
 DETERMINISTIC_MIN_DISTINCT_DOCS = 2
 DETERMINISTIC_MAX_SENTENCES_PER_DOC = 2
+MIN_DOMAIN_SENTENCES = 2
 
 _REQ_TERMS = (
     "shall",
@@ -94,6 +100,166 @@ _BROAD_REQUIREMENT_ANCHORS = (
     "annex 15",
     "21 cfr 211",
 )
+
+_APR_QUERY_ANCHORS = (
+    "annual product review",
+    "product quality review",
+    "pqr",
+    "annual review",
+    "quality review",
+)
+
+_DATA_INTEGRITY_QUERY_ANCHORS = (
+    "data integrity",
+    "alcoa",
+    "audit trail",
+    "metadata",
+    "attributable",
+    "legible",
+    "contemporaneous",
+    "original",
+    "accurate",
+    "record retention",
+)
+
+_DEVIATION_QUERY_ANCHORS = (
+    "deviation",
+    "deviation investigation",
+    "investigation",
+    "root cause",
+    "impact assessment",
+    "corrective action",
+    "preventive action",
+    "capa",
+    "deviation report",
+)
+
+_EQUIPMENT_QUAL_QUERY_ANCHORS = (
+    "equipment qualification",
+    "installation qualification",
+    "operational qualification",
+    "performance qualification",
+    "iq",
+    "oq",
+    "pq",
+    "qualification protocol",
+    "qualification report",
+    "acceptance criteria",
+)
+
+_VALIDATION_QUERY_ANCHORS = (
+    "process validation",
+    "stage 1",
+    "stage 2",
+    "stage 3",
+    "lifecycle",
+    "validation master plan",
+    "vmp",
+    "continued process verification",
+    "cleaning validation",
+    "revalidation",
+    "ppq",
+    "cpv",
+)
+
+_REQUALIFICATION_QUERY_ANCHORS = (
+    "requalification",
+    "periodic qualification",
+    "periodic review",
+    "qualification review",
+    "revalidation",
+    "iq",
+    "oq",
+    "pq",
+)
+
+_DATA_INTEGRITY_QUERY_TRIGGERS = (
+    "data integrity",
+    "alcoa",
+    "audit trail",
+    "metadata",
+    "record retention",
+    "true copy",
+)
+
+_VALIDATION_QUERY_TRIGGERS = (
+    "process validation",
+    "validation stages",
+    "lifecycle approach",
+    "vmp",
+    "validation master plan",
+    "cleaning validation",
+    "revalidation",
+)
+
+_REQUALIFICATION_QUERY_TRIGGERS = (
+    "requalification",
+    "periodic qualification",
+)
+
+_VALIDATION_DOMAIN_QUERY_SUBSTRINGS = (
+    "validation",
+    "vmp",
+    "revalidation",
+    "cleaning validation",
+    "continued process verification",
+    "lifecycle",
+)
+
+_DOMAIN_DETECTION_PRIORITY = (
+    "deviations",
+    "equipment_qualification",
+    "data_integrity",
+    "computerized_systems",
+    "apr",
+    "validation",
+)
+
+_DEVIATION_OOS_QUERY_SUBSTRINGS = (
+    "oos",
+    "out-of-specification",
+    "out of specification",
+    "out of spec",
+    "laboratory investigation",
+)
+
+_APR_PRIMARY_QUERY_SUBSTRINGS = (
+    "apr",
+    "pqr",
+    "product quality review",
+    "annual product review",
+)
+
+_RELAXED_DOMAIN_CHUNK_FILTER_KEYS = {
+    "data_integrity",
+    "computerized_systems",
+    "apr",
+    "validation",
+}
+
+_ALLOWED_DOCS_RELAXED_RETRY_KEYS = {
+    "computerized_systems",
+    "data_integrity",
+}
+
+_PHASE_C_DEBUG_IDS = {"ev037", "ev042"}
+
+
+def _fallback_debug(
+    *,
+    case_id: str | None,
+    branch: str,
+    retrieved_chunks: int,
+    used_sentences: int,
+    citations_count: int,
+    flags: dict[str, object],
+) -> None:
+    if case_id not in _PHASE_C_DEBUG_IDS:
+        return
+    print(
+        f"[FALLBACK] case={case_id} branch={branch} retrieved_chunks={int(retrieved_chunks)} "
+        f"used_sentences={int(used_sentences)} citations={int(citations_count)} flags={flags}"
+    )
 
 
 def _intent(question: str) -> str:
@@ -175,6 +341,168 @@ def _phase_a_query_variants(question: str) -> list[str]:
     return variants
 
 
+def _is_apr_query(question: str) -> bool:
+    q_raw = (question or "")
+    if not q_raw:
+        return False
+    q = _normalize_substring_text(q_raw)
+    q_pad = f" {q} "
+    if " apr " in q_pad or " pqr " in q_pad:
+        return True
+    if "annual product review" in q or "product quality review" in q:
+        return True
+    if "annual" in q and "review" in q:
+        return True
+    if "product" in q and "review" in q:
+        return True
+    return False
+
+
+def _apr_anchor_terms(question: str) -> list[str]:
+    if not _is_apr_query(question):
+        return []
+    return [a for a in _APR_QUERY_ANCHORS]
+
+
+def _normalize_substring_text(text: str) -> str:
+    s = "".join(ch if ch.isalnum() else " " for ch in (text or "").lower())
+    return " ".join(s.split())
+
+
+def _is_deviation_query(question: str) -> bool:
+    q_raw = (question or "")
+    if not q_raw:
+        return False
+    q = _normalize_substring_text(q_raw)
+    q_pad = f" {q} "
+    has_deviation = ("deviation" in q) or ("nonconformance" in q) or ("non conformance" in q)
+    if has_deviation:
+        return True
+    if "root cause" in q:
+        return True
+    if "investigation" in q and has_deviation:
+        return True
+    if "capa" in q and ("deviation" in q or "investigation" in q):
+        return True
+    # Keep exact-token behavior for single acronyms.
+    if " capa " in q_pad and (" deviation " in q_pad or " investigation " in q_pad):
+        return True
+    return False
+
+
+def _deviation_anchor_terms(question: str) -> list[str]:
+    if not _is_deviation_query(question):
+        return []
+    return [a for a in _DEVIATION_QUERY_ANCHORS]
+
+
+def _is_data_integrity_query(question: str) -> bool:
+    q_raw = (question or "")
+    if not q_raw:
+        return False
+    q = _normalize_substring_text(q_raw)
+    for trigger in _DATA_INTEGRITY_QUERY_TRIGGERS:
+        if trigger in q:
+            return True
+    return False
+
+
+def _data_integrity_anchor_terms(question: str) -> list[str]:
+    if not _is_data_integrity_query(question):
+        return []
+    return [a for a in _DATA_INTEGRITY_QUERY_ANCHORS]
+
+
+def _is_equipment_qualification_query(question: str) -> bool:
+    q_raw = (question or "")
+    if not q_raw:
+        return False
+    q = _normalize_substring_text(q_raw)
+    q_pad = f" {q} "
+    if " iq " in q_pad or " oq " in q_pad or " pq " in q_pad:
+        return True
+    if "installation qualification" in q:
+        return True
+    if "operational qualification" in q:
+        return True
+    if "performance qualification" in q:
+        return True
+    if "equipment qualification" in q:
+        return True
+    if "qualification protocol" in q:
+        return True
+    if "qualification report" in q:
+        return True
+    return False
+
+
+def _equipment_qualification_anchor_terms(question: str) -> list[str]:
+    if not _is_equipment_qualification_query(question):
+        return []
+    return [a for a in _EQUIPMENT_QUAL_QUERY_ANCHORS]
+
+
+def _is_validation_anchor_query(question: str) -> bool:
+    q_raw = (question or "")
+    if not q_raw:
+        return False
+    q = _normalize_substring_text(q_raw)
+    for trigger in _VALIDATION_QUERY_TRIGGERS:
+        if trigger in q:
+            return True
+    return False
+
+
+def _validation_anchor_terms(question: str) -> list[str]:
+    if not _is_validation_anchor_query(question):
+        return []
+    return [a for a in _VALIDATION_QUERY_ANCHORS]
+
+
+def _is_requalification_query(question: str) -> bool:
+    q_raw = (question or "")
+    if not q_raw:
+        return False
+    q = _normalize_substring_text(q_raw)
+    for trigger in _REQUALIFICATION_QUERY_TRIGGERS:
+        if trigger in q:
+            return True
+    return False
+
+
+def _requalification_anchor_terms(question: str) -> list[str]:
+    if not _is_requalification_query(question):
+        return []
+    return [a for a in _REQUALIFICATION_QUERY_ANCHORS]
+
+
+def _targeted_anchor_terms(question: str) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for src in (
+        _apr_anchor_terms(question),
+        _data_integrity_anchor_terms(question),
+        _deviation_anchor_terms(question),
+        _equipment_qualification_anchor_terms(question),
+        _validation_anchor_terms(question),
+        _requalification_anchor_terms(question),
+    ):
+        for t in src:
+            ts = str(t).strip().lower()
+            if not ts or ts in seen:
+                continue
+            seen.add(ts)
+            out.append(ts)
+    return out
+
+
+def _expanded_query_with_anchors(question: str, anchor_terms: list[str]) -> str:
+    q = normalize_text(question or "")
+    if not q or not anchor_terms:
+        return ""
+    return normalize_text(f"{q} {' '.join(anchor_terms)}")
+
+
 def _phase_a_chunk_preview(chunks: list[dict]) -> list[dict[str, object]]:
     out: list[dict[str, object]] = []
     for c in chunks:
@@ -228,6 +556,69 @@ def _chunk_req_hits(chunk: dict) -> int:
         return int(chunk.get("_req_signal_hits", 0))
     except Exception:
         return 0
+
+
+def _apply_domain_chunk_post_filter(
+    chunks: list[dict],
+    *,
+    domain_key: str | None,
+) -> tuple[list[dict], dict[str, object]]:
+    before_count = int(len(chunks))
+    stats: dict[str, object] = {
+        "chunks_before": before_count,
+        "chunks_after_domain_chunk_filter": before_count,
+        "chunks_after_level1_strict": before_count,
+        "chunks_after_level2_relaxed": before_count,
+        "domain_chunk_filter_used": False,
+        "domain_chunk_filter_level_used": 0,
+        "fallback_used": False,
+    }
+    if not domain_key or domain_key not in DOMAIN_LEXICONS:
+        return list(chunks), stats
+
+    cfg = DOMAIN_LEXICONS.get(domain_key, {})
+    strong_tokens = list(cfg.get("strong_tokens", []))
+    secondary_tokens = list(cfg.get("secondary_tokens", []))
+    negative_tokens = list(cfg.get("negative_tokens", []))
+
+    def _chunk_passes_rule(chunk_text: str, *, min_secondary: int) -> bool:
+        t = _match_normalized_text(chunk_text)
+        if not t:
+            return False
+        if _unique_token_hits(t, negative_tokens):
+            return False
+        strong_hits = _unique_token_hits(t, strong_tokens)
+        secondary_hits = _unique_token_hits(t, secondary_tokens)
+        return (len(strong_hits) >= 1) or (len(secondary_hits) >= int(min_secondary))
+
+    strict_filtered = [
+        c for c in chunks if _chunk_passes_rule(str(c.get("text") or ""), min_secondary=2)
+    ]
+    strict_count = int(len(strict_filtered))
+    stats["chunks_after_level1_strict"] = strict_count
+    if strict_count >= int(MIN_CONTEXT_CHUNKS):
+        stats["chunks_after_domain_chunk_filter"] = strict_count
+        stats["domain_chunk_filter_used"] = True
+        stats["domain_chunk_filter_level_used"] = 1
+        return strict_filtered, stats
+
+    relaxed_count = strict_count
+    relaxed_filtered = strict_filtered
+    if domain_key in _RELAXED_DOMAIN_CHUNK_FILTER_KEYS:
+        relaxed_filtered = [
+            c for c in chunks if _chunk_passes_rule(str(c.get("text") or ""), min_secondary=1)
+        ]
+        relaxed_count = int(len(relaxed_filtered))
+    stats["chunks_after_level2_relaxed"] = relaxed_count
+    if relaxed_count >= int(MIN_CONTEXT_CHUNKS):
+        stats["chunks_after_domain_chunk_filter"] = relaxed_count
+        stats["domain_chunk_filter_used"] = True
+        stats["domain_chunk_filter_level_used"] = 2
+        return relaxed_filtered, stats
+
+    stats["chunks_after_domain_chunk_filter"] = before_count
+    stats["fallback_used"] = True
+    return list(chunks), stats
 
 
 def _balance_phase_a_chunks(chunks: list[dict], *, target_k: int) -> tuple[list[dict], dict[str, object]]:
@@ -336,7 +727,7 @@ def _balance_phase_a_chunks(chunks: list[dict], *, target_k: int) -> tuple[list[
     }
 
 
-def _retrieve_chunks_for_queries(
+def _collect_retrieved_chunks_for_queries(
     queries: list[str],
     *,
     scope: str,
@@ -344,23 +735,30 @@ def _retrieve_chunks_for_queries(
     chunk_chars: int,
     min_chunk_chars: int,
     min_similarity: float,
+    top_k: int,
     allowed_docs: list[str] | None = None,
+    anchor_terms: list[str] | None = None,
+    empty_retrieval_events: list[dict[str, object]] | None = None,
 ) -> list[dict]:
     merged: dict[tuple[str, int, str], dict] = {}
     for q in queries:
-        for c in search_chunks(
+        hits = search_chunks(
             q,
             data_dir=data_dir,
             scope=scope,
-            top_k=RETRIEVAL_TOP_K,
+            top_k=top_k,
             max_context_chunks=MAX_CONTEXT_CHUNKS,
             min_similarity=min_similarity,
             use_mmr=USE_MMR,
             mmr_lambda=MMR_LAMBDA,
             allowed_docs=allowed_docs,
+            anchor_terms=anchor_terms,
             chunk_chars=chunk_chars,
             min_chunk_chars=min_chunk_chars,
-        ):
+        )
+        if empty_retrieval_events is not None:
+            empty_retrieval_events.extend(search_module.pop_empty_retrieval_events())
+        for c in hits:
             key = (str(c.get("file") or ""), int(c.get("page") or 0), str(c.get("chunk_id") or ""))
             prev = merged.get(key)
             if prev is None or float(c.get("_score", 0.0)) > float(prev.get("_score", 0.0)):
@@ -375,6 +773,85 @@ def _retrieve_chunks_for_queries(
         ),
     )
     return ordered[:PHASE_A_BALANCE_POOL_CHUNKS]
+
+
+def _retrieve_chunks_for_queries(
+    queries: list[str],
+    *,
+    scope: str,
+    data_dir: Path,
+    chunk_chars: int,
+    min_chunk_chars: int,
+    min_similarity: float,
+    domain_key: str | None = None,
+    allowed_docs: list[str] | None = None,
+    anchor_terms: list[str] | None = None,
+    empty_retrieval_events: list[dict[str, object]] | None = None,
+    enable_allowed_docs_relaxed_retry: bool = False,
+) -> tuple[list[dict], dict[str, object]]:
+    phase_a_top_k = int(RETRIEVAL_TOP_K) + 4
+    attempt1_chunks = _collect_retrieved_chunks_for_queries(
+        queries,
+        scope=scope,
+        data_dir=data_dir,
+        chunk_chars=chunk_chars,
+        min_chunk_chars=min_chunk_chars,
+        min_similarity=min_similarity,
+        top_k=phase_a_top_k,
+        allowed_docs=allowed_docs,
+        anchor_terms=anchor_terms,
+        empty_retrieval_events=empty_retrieval_events,
+    )
+    pool_size_attempt1 = int(len(attempt1_chunks))
+    pool_size_attempt2 = 0
+    allowed_docs_relaxed_retry_used = False
+    top_chunks = list(attempt1_chunks)
+    if (
+        enable_allowed_docs_relaxed_retry
+        and domain_key in _ALLOWED_DOCS_RELAXED_RETRY_KEYS
+        and allowed_docs is not None
+        and pool_size_attempt1 < 3
+    ):
+        allowed_docs_relaxed_retry_used = True
+        attempt2_chunks = _collect_retrieved_chunks_for_queries(
+            queries,
+            scope=scope,
+            data_dir=data_dir,
+            chunk_chars=chunk_chars,
+            min_chunk_chars=min_chunk_chars,
+            min_similarity=min_similarity,
+            top_k=phase_a_top_k,
+            allowed_docs=None,
+            anchor_terms=anchor_terms,
+            empty_retrieval_events=empty_retrieval_events,
+        )
+        pool_size_attempt2 = int(len(attempt2_chunks))
+        merged_chunks: dict[tuple[str, int, str], dict] = {}
+        for c in top_chunks + attempt2_chunks:
+            key = (str(c.get("file") or ""), int(c.get("page") or 0), str(c.get("chunk_id") or ""))
+            prev = merged_chunks.get(key)
+            if prev is None or float(c.get("_score", 0.0)) > float(prev.get("_score", 0.0)):
+                merged_chunks[key] = c
+        top_chunks = sorted(
+            merged_chunks.values(),
+            key=lambda x: (
+                -float(x.get("_score", 0.0)),
+                str(x.get("file") or ""),
+                int(x.get("page") or 0),
+                str(x.get("chunk_id") or ""),
+            ),
+        )[:PHASE_A_BALANCE_POOL_CHUNKS]
+
+    filtered_chunks, filter_stats = _apply_domain_chunk_post_filter(
+        top_chunks,
+        domain_key=domain_key,
+    )
+    filter_stats["top_k_used"] = int(phase_a_top_k)
+    filter_stats["pool_size_returned"] = int(len(top_chunks))
+    filter_stats["pool_size_attempt1"] = int(pool_size_attempt1)
+    filter_stats["pool_size_attempt2"] = int(pool_size_attempt2)
+    filter_stats["allowed_docs_relaxed_retry_used"] = bool(allowed_docs_relaxed_retry_used)
+    return filtered_chunks, filter_stats
 
 
 def _clean_text(text: str) -> str:
@@ -448,38 +925,158 @@ def _phase_a_retrieval(
         "authorities_kept": [],
         "soft_floor_score": 0.0,
     }
+    domain_key = _domain_key_for_question(question)
     queries = _phase_a_query_variants(question)
-    candidate_docs = route_docs(queries, top_docs=5)
+    anchor_terms = _targeted_anchor_terms(question)
+    expanded_query = _expanded_query_with_anchors(question, anchor_terms)
+    retrieval_queries = list(queries)
+    if expanded_query and expanded_query not in retrieval_queries:
+        retrieval_queries.append(expanded_query)
+
+    candidate_docs = route_docs(retrieval_queries, top_docs=5)
     allowed_docs = candidate_docs if candidate_docs else None
+    search_module.pop_empty_retrieval_events()
+    empty_retrieval_events: list[dict[str, object]] = []
+    empty_result_scope_retry_attempted = False
+    empty_result_scope_retry_used = False
     attempts: list[dict[str, object]] = []
-    chunks = _retrieve_chunks_for_queries(
-        queries,
+    chunks, chunk_filter_stats = _retrieve_chunks_for_queries(
+        retrieval_queries,
         data_dir=data_dir,
         scope=scope,
         min_similarity=MIN_SIMILARITY,
+        domain_key=domain_key,
         chunk_chars=chunk_chars,
         min_chunk_chars=min_chunk_chars,
         allowed_docs=allowed_docs,
+        anchor_terms=anchor_terms,
+        empty_retrieval_events=empty_retrieval_events,
+        enable_allowed_docs_relaxed_retry=True,
     )
     attempts.append(
         {
             "min_similarity": float(MIN_SIMILARITY),
+            "scope": str(scope or "MIXED"),
+            "allowed_docs_restricted": bool(allowed_docs),
+            "chunks_before": int(chunk_filter_stats.get("chunks_before", 0)),
+            "top_k_used": int(chunk_filter_stats.get("top_k_used", 0)),
+            "pool_size_returned": int(chunk_filter_stats.get("pool_size_returned", 0)),
+            "pool_size_attempt1": int(chunk_filter_stats.get("pool_size_attempt1", 0)),
+            "pool_size_attempt2": int(chunk_filter_stats.get("pool_size_attempt2", 0)),
+            "allowed_docs_relaxed_retry_used": bool(
+                chunk_filter_stats.get("allowed_docs_relaxed_retry_used", False)
+            ),
+            "chunks_after_domain_chunk_filter": int(
+                chunk_filter_stats.get("chunks_after_domain_chunk_filter", 0)
+            ),
+            "chunks_after_level1_strict": int(
+                chunk_filter_stats.get("chunks_after_level1_strict", 0)
+            ),
+            "chunks_after_level2_relaxed": int(
+                chunk_filter_stats.get("chunks_after_level2_relaxed", 0)
+            ),
+            "domain_chunk_filter_used": bool(
+                chunk_filter_stats.get("domain_chunk_filter_used", False)
+            ),
+            "domain_chunk_filter_level_used": int(
+                chunk_filter_stats.get("domain_chunk_filter_level_used", 0)
+            ),
+            "fallback_used": bool(chunk_filter_stats.get("fallback_used", False)),
             "top_results": _phase_a_chunk_preview(chunks),
         }
     )
+    if not chunks:
+        empty_result_scope_retry_attempted = True
+        mixed_scope_chunks, mixed_chunk_filter_stats = _retrieve_chunks_for_queries(
+            retrieval_queries,
+            data_dir=data_dir,
+            scope="MIXED",
+            min_similarity=MIN_SIMILARITY,
+            domain_key=domain_key,
+            chunk_chars=chunk_chars,
+            min_chunk_chars=min_chunk_chars,
+            allowed_docs=None,
+            anchor_terms=anchor_terms,
+            empty_retrieval_events=empty_retrieval_events,
+        )
+        attempts.append(
+            {
+                "min_similarity": float(MIN_SIMILARITY),
+                "scope": "MIXED",
+                "allowed_docs_restricted": False,
+                "retry_reason": "empty_primary_relaxed_scope",
+                "chunks_before": int(mixed_chunk_filter_stats.get("chunks_before", 0)),
+                "top_k_used": int(mixed_chunk_filter_stats.get("top_k_used", 0)),
+                "pool_size_returned": int(mixed_chunk_filter_stats.get("pool_size_returned", 0)),
+                "pool_size_attempt1": int(mixed_chunk_filter_stats.get("pool_size_attempt1", 0)),
+                "pool_size_attempt2": int(mixed_chunk_filter_stats.get("pool_size_attempt2", 0)),
+                "allowed_docs_relaxed_retry_used": bool(
+                    mixed_chunk_filter_stats.get("allowed_docs_relaxed_retry_used", False)
+                ),
+                "chunks_after_domain_chunk_filter": int(
+                    mixed_chunk_filter_stats.get("chunks_after_domain_chunk_filter", 0)
+                ),
+                "chunks_after_level1_strict": int(
+                    mixed_chunk_filter_stats.get("chunks_after_level1_strict", 0)
+                ),
+                "chunks_after_level2_relaxed": int(
+                    mixed_chunk_filter_stats.get("chunks_after_level2_relaxed", 0)
+                ),
+                "domain_chunk_filter_used": bool(
+                    mixed_chunk_filter_stats.get("domain_chunk_filter_used", False)
+                ),
+                "domain_chunk_filter_level_used": int(
+                    mixed_chunk_filter_stats.get("domain_chunk_filter_level_used", 0)
+                ),
+                "fallback_used": bool(mixed_chunk_filter_stats.get("fallback_used", False)),
+                "top_results": _phase_a_chunk_preview(mixed_scope_chunks),
+            }
+        )
+        if mixed_scope_chunks:
+            chunks = mixed_scope_chunks
+            empty_result_scope_retry_used = True
     if not chunks and FALLBACK_ONLY_IF_EMPTY:
-        fallback_chunks = _retrieve_chunks_for_queries(
-            queries,
+        fallback_chunks, fallback_chunk_filter_stats = _retrieve_chunks_for_queries(
+            retrieval_queries,
             data_dir=data_dir,
             scope=scope,
             min_similarity=FALLBACK_MIN_SIMILARITY,
+            domain_key=domain_key,
             chunk_chars=chunk_chars,
             min_chunk_chars=min_chunk_chars,
             allowed_docs=allowed_docs,
+            anchor_terms=anchor_terms,
+            empty_retrieval_events=empty_retrieval_events,
         )
         attempts.append(
             {
                 "min_similarity": float(FALLBACK_MIN_SIMILARITY),
+                "scope": str(scope or "MIXED"),
+                "allowed_docs_restricted": bool(allowed_docs),
+                "chunks_before": int(fallback_chunk_filter_stats.get("chunks_before", 0)),
+                "top_k_used": int(fallback_chunk_filter_stats.get("top_k_used", 0)),
+                "pool_size_returned": int(fallback_chunk_filter_stats.get("pool_size_returned", 0)),
+                "pool_size_attempt1": int(fallback_chunk_filter_stats.get("pool_size_attempt1", 0)),
+                "pool_size_attempt2": int(fallback_chunk_filter_stats.get("pool_size_attempt2", 0)),
+                "allowed_docs_relaxed_retry_used": bool(
+                    fallback_chunk_filter_stats.get("allowed_docs_relaxed_retry_used", False)
+                ),
+                "chunks_after_domain_chunk_filter": int(
+                    fallback_chunk_filter_stats.get("chunks_after_domain_chunk_filter", 0)
+                ),
+                "chunks_after_level1_strict": int(
+                    fallback_chunk_filter_stats.get("chunks_after_level1_strict", 0)
+                ),
+                "chunks_after_level2_relaxed": int(
+                    fallback_chunk_filter_stats.get("chunks_after_level2_relaxed", 0)
+                ),
+                "domain_chunk_filter_used": bool(
+                    fallback_chunk_filter_stats.get("domain_chunk_filter_used", False)
+                ),
+                "domain_chunk_filter_level_used": int(
+                    fallback_chunk_filter_stats.get("domain_chunk_filter_level_used", 0)
+                ),
+                "fallback_used": bool(fallback_chunk_filter_stats.get("fallback_used", False)),
                 "top_results": _phase_a_chunk_preview(fallback_chunks),
             }
         )
@@ -504,10 +1101,15 @@ def _phase_a_retrieval(
         )
     trace = {
         "queries_used": queries,
+        "anchor_terms_used": anchor_terms,
+        "expanded_query_used": expanded_query,
         "candidate_docs": candidate_docs,
         "thresholds_attempted": [float(a["min_similarity"]) for a in attempts],
         "attempts": attempts,
         "fallback_used": bool(fallback_used),
+        "empty_result_scope_retry_attempted": bool(empty_result_scope_retry_attempted),
+        "empty_result_scope_retry_used": bool(empty_result_scope_retry_used),
+        "empty_retrieval_events": empty_retrieval_events,
         "balancing": balance_trace,
     }
     return out, fallback_used, trace
@@ -763,9 +1365,30 @@ def _looks_truncated_ending(sentence: str) -> bool:
 
 
 def _extract_clean_requirement_sentences(quote: str, *, max_items: int = 2) -> list[str]:
+    out, _counts, _reasons = _extract_clean_requirement_sentences_with_trace(
+        quote,
+        max_items=max_items,
+    )
+    return out
+
+
+def _extract_clean_requirement_sentences_with_trace(
+    quote: str,
+    *,
+    max_items: int = 2,
+) -> tuple[list[str], dict[str, int], dict[str, list[str]]]:
     candidates = _split_complete_sentences(quote)
+    counts = {
+        "n_after_split": int(len(candidates)),
+        "n_after_sentence_cleaning": 0,
+        "n_after_dedupe": 0,
+    }
+    reasons: dict[str, list[str]] = {
+        "sentence_cleaning": [],
+        "dedupe": [],
+    }
     if not candidates:
-        return []
+        return [], counts, reasons
 
     ordered = sorted(
         candidates,
@@ -775,34 +1398,302 @@ def _extract_clean_requirement_sentences(quote: str, *, max_items: int = 2) -> l
         ),
     )
 
-    out: list[str] = []
-    seen: set[str] = set()
+    cleaned: list[str] = []
     for s in ordered:
         trimmed = _trim_sentence_words(s, max_words=30)
         if not trimmed:
+            reasons["sentence_cleaning"].append("empty after clean")
             continue
         normalized = _normalize_sentence_casing(trimmed)
         if not normalized:
+            reasons["sentence_cleaning"].append("empty after casing normalize")
             continue
         if _looks_like_heading_text(normalized):
+            reasons["sentence_cleaning"].append("failed heading filter")
             continue
         if _looks_truncated_ending(normalized):
+            reasons["sentence_cleaning"].append("failed truncated ending filter")
             continue
         if normalized[-1] not in ".;:":
+            reasons["sentence_cleaning"].append("failed terminal punctuation filter")
             continue
+        cleaned.append(normalized)
+    counts["n_after_sentence_cleaning"] = int(len(cleaned))
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for normalized in cleaned:
         k = re.sub(r"[^a-z0-9]+", " ", normalized.lower()).strip()
-        if not k or k in seen:
+        if not k:
+            reasons["dedupe"].append("empty dedupe key")
+            continue
+        if k in seen:
+            reasons["dedupe"].append("duplicate sentence")
             continue
         seen.add(k)
-        out.append(normalized)
-        if len(out) >= max_items:
+        deduped.append(normalized)
+    counts["n_after_dedupe"] = int(len(deduped))
+
+    return deduped[:max_items], counts, reasons
+
+
+def _match_normalized_text(text: str) -> str:
+    return " ".join((text or "").lower().split())
+
+
+def _unique_token_hits(text: str, tokens: list[str] | tuple[str, ...]) -> set[str]:
+    t = _match_normalized_text(text)
+    hits: set[str] = set()
+    if not t:
+        return hits
+    for tok in tokens:
+        s = _match_normalized_text(str(tok))
+        if s and s in t:
+            hits.add(s)
+    return hits
+
+
+def _contains_any_substring(text: str, substrings: tuple[str, ...]) -> bool:
+    t = _match_normalized_text(text)
+    if not t:
+        return False
+    for s in substrings:
+        if _match_normalized_text(s) in t:
+            return True
+    return False
+
+
+def _has_oos_deviation_trigger(question_norm: str) -> bool:
+    if _contains_any_substring(question_norm, _DEVIATION_OOS_QUERY_SUBSTRINGS):
+        return True
+    return ("phase i" in question_norm) and ("phase ii" in question_norm)
+
+
+def _apr_trigger_allowed(question_norm: str) -> bool:
+    if _has_oos_deviation_trigger(question_norm):
+        return False
+    return _contains_any_substring(question_norm, _APR_PRIMARY_QUERY_SUBSTRINGS)
+
+
+def _domain_score_for_question(question_norm: str, domain_key: str) -> int:
+    cfg = DOMAIN_LEXICONS.get(domain_key, {})
+    strong_hits = _unique_token_hits(question_norm, list(cfg.get("strong_tokens", [])))
+    secondary_hits = _unique_token_hits(question_norm, list(cfg.get("secondary_tokens", [])))
+    return (3 * len(strong_hits)) + len(secondary_hits)
+
+
+def _domain_key_for_question(question: str) -> str | None:
+    q = _match_normalized_text(normalize_text(question or ""))
+    if not q:
+        return None
+
+    # Deterministic OOS/deviation trigger must override APR and others.
+    if _has_oos_deviation_trigger(q):
+        return "deviations"
+
+    best_key: str | None = None
+    best_score = 0
+    for key in _DOMAIN_DETECTION_PRIORITY:
+        if key not in DOMAIN_LEXICONS:
+            continue
+        if key == "apr" and not _apr_trigger_allowed(q):
+            continue
+        score = _domain_score_for_question(q, key)
+        if key == "validation" and _contains_any_substring(q, _VALIDATION_DOMAIN_QUERY_SUBSTRINGS):
+            score = max(score, 1)
+        if score > best_score:
+            best_score = score
+            best_key = key
+
+    if best_score > 0:
+        return best_key
+    if _apr_trigger_allowed(q):
+        return "apr"
+    if _contains_any_substring(q, _VALIDATION_DOMAIN_QUERY_SUBSTRINGS):
+        return "validation"
+    return None
+
+
+def _sentence_passes_domain_lexicon(sentence_text: str, domain_key: str) -> bool:
+    cfg = DOMAIN_LEXICONS.get(domain_key)
+    if not isinstance(cfg, dict):
+        return True
+
+    t = _match_normalized_text(sentence_text)
+    if not t:
+        return False
+
+    neg_hits = _unique_token_hits(t, list(cfg.get("negative_tokens", [])))
+    if neg_hits:
+        return False
+
+    strong_hits = _unique_token_hits(t, list(cfg.get("strong_tokens", [])))
+    secondary_hits = _unique_token_hits(t, list(cfg.get("secondary_tokens", [])))
+
+    min_strong = int(cfg.get("min_strong", 1))
+    min_secondary = int(cfg.get("min_secondary", 2))
+    return len(strong_hits) >= min_strong or len(secondary_hits) >= min_secondary
+
+
+def _domain_sentence_rejection_reason(sentence_text: str, domain_key: str) -> str:
+    cfg = DOMAIN_LEXICONS.get(domain_key)
+    if not isinstance(cfg, dict):
+        return "domain not configured"
+
+    t = _match_normalized_text(sentence_text)
+    if not t:
+        return "failed domain lexicon: empty normalized sentence"
+
+    neg_hits = _unique_token_hits(t, list(cfg.get("negative_tokens", [])))
+    if neg_hits:
+        shown = ", ".join(sorted(neg_hits)[:3])
+        return f"failed negative tokens: {shown}"
+
+    strong_hits = _unique_token_hits(t, list(cfg.get("strong_tokens", [])))
+    secondary_hits = _unique_token_hits(t, list(cfg.get("secondary_tokens", [])))
+    min_strong = int(cfg.get("min_strong", 1))
+    min_secondary = int(cfg.get("min_secondary", 2))
+    if len(strong_hits) >= min_strong or len(secondary_hits) >= min_secondary:
+        return ""
+    return (
+        f"failed domain lexicon: strong={len(strong_hits)} secondary={len(secondary_hits)} "
+        f"required_strong={min_strong} required_secondary={min_secondary}"
+    )
+
+
+def _strip_requirement_prefix(sentence: str) -> str:
+    s = (sentence or "").strip()
+    if s.lower().startswith("requirement:"):
+        return s[len("Requirement:") :].strip()
+    return s
+
+
+def _phase_c_sentence_candidates(
+    *,
+    question: str,
+    selected_facts: list[Fact],
+    case_id: str | None = None,
+) -> tuple[list[tuple[str, Citation, float]], dict[str, object]]:
+    debug = bool(case_id in _PHASE_C_DEBUG_IDS)
+    candidates_all: list[tuple[str, Citation, float]] = []
+    candidates_req: list[tuple[str, Citation, float]] = []
+    n_after_split = 0
+    n_after_sentence_cleaning = 0
+    n_after_dedupe = 0
+    reasons_sentence_cleaning: list[str] = []
+    reasons_dedupe: list[str] = []
+    reasons_requirement: list[str] = []
+    reasons_domain: list[str] = []
+    per_fact_limit = 2 if len(selected_facts) > 1 else 3
+    for f in selected_facts:
+        cit = Citation(doc_id=f.pdf, page=f.page, chunk_id=f.chunk_id)
+        extracted, stage_counts, stage_reasons = _extract_clean_requirement_sentences_with_trace(
+            f.quote,
+            max_items=per_fact_limit,
+        )
+        n_after_split += int(stage_counts.get("n_after_split", 0))
+        n_after_sentence_cleaning += int(stage_counts.get("n_after_sentence_cleaning", 0))
+        n_after_dedupe += int(stage_counts.get("n_after_dedupe", 0))
+        reasons_sentence_cleaning.extend(stage_reasons.get("sentence_cleaning", []))
+        reasons_dedupe.extend(stage_reasons.get("dedupe", []))
+        for s in extracted:
+            candidates_all.append((f"Requirement: {s}" if _has_requirement_language(s) else s, cit, float(f.score)))
+            if not _has_requirement_language(s):
+                reasons_requirement.append(
+                    "failed requirement-bearing: no requirement indicator in sentence"
+                )
+                continue
+            candidates_req.append((f"Requirement: {s}", cit, float(f.score)))
+            if len(candidates_all) >= DETERMINISTIC_PHASE_C_MAX_FACTS:
+                break
+        if len(candidates_all) >= DETERMINISTIC_PHASE_C_MAX_FACTS:
             break
-    return out
+
+    domain_key = _domain_key_for_question(question)
+    domain_candidates: list[tuple[str, Citation, float]] = []
+    if domain_key in DOMAIN_LEXICONS:
+        for sent, cit, sc in candidates_req:
+            plain = _strip_requirement_prefix(sent)
+            if _sentence_passes_domain_lexicon(plain, domain_key):
+                domain_candidates.append((sent, cit, sc))
+            else:
+                reasons_domain.append(_domain_sentence_rejection_reason(plain, domain_key))
+
+    use_domain_filter = bool(domain_key in DOMAIN_LEXICONS and len(domain_candidates) >= MIN_DOMAIN_SENTENCES)
+    if domain_key in DOMAIN_LEXICONS:
+        chosen = domain_candidates if use_domain_filter else candidates_req
+    else:
+        chosen = candidates_all
+    n_final_used = int(len(chosen[:DETERMINISTIC_PHASE_C_MAX_FACTS]))
+
+    if debug:
+        n_after_requirement_gate = int(len(candidates_req))
+        n_after_domain_gate = int(len(domain_candidates))
+        print(
+            f"[PHASEC_STAGES] case={case_id} split={n_after_split} "
+            f"clean={n_after_sentence_cleaning} dedupe={n_after_dedupe} "
+            f"req={n_after_requirement_gate} domain={n_after_domain_gate} "
+            f"used={n_final_used}"
+        )
+        stage_names = [
+            "split",
+            "sentence_cleaning",
+            "dedupe",
+            "requirement_gate",
+            "domain_gate",
+            "final_used",
+        ]
+        stage_values = [
+            int(n_after_split),
+            int(n_after_sentence_cleaning),
+            int(n_after_dedupe),
+            int(n_after_requirement_gate),
+            int(n_after_domain_gate),
+            int(n_final_used),
+        ]
+        collapse_stage = ""
+        for idx in range(1, len(stage_values)):
+            if stage_values[idx - 1] > 0 and stage_values[idx] == 0:
+                collapse_stage = stage_names[idx]
+                break
+        if collapse_stage:
+            print(f"[PHASEC_COLLAPSE] case={case_id} stage={collapse_stage}")
+            reason_map = {
+                "sentence_cleaning": reasons_sentence_cleaning,
+                "dedupe": reasons_dedupe,
+                "requirement_gate": reasons_requirement,
+                "domain_gate": reasons_domain,
+                "final_used": [],
+            }
+            stage_reasons = reason_map.get(collapse_stage, [])
+            for ridx, reason in enumerate(stage_reasons[:10], start=1):
+                print(f"[PHASEC_REASON] case={case_id} stage={collapse_stage} #{ridx}: {reason}")
+        elif stage_values[0] > 0 and int(n_after_split) == 0:
+            print(f"[PHASEC_COLLAPSE] case={case_id} stage=bookkeeping_bug")
+
+    stats = {
+        "domain_key": domain_key,
+        "N_total_sentences": int(n_after_dedupe),
+        "N_requirement_bearing": int(len(candidates_req)),
+        "N_domain_eligible": int(len(domain_candidates)),
+        "domain_filter_used": bool(use_domain_filter),
+        "sentences_extracted_total": int(n_after_split),
+        "sentences_after_cleaning": int(n_after_sentence_cleaning),
+        "sentences_after_dedupe": int(n_after_dedupe),
+        "sentences_after_requirement_gate": int(len(candidates_req)),
+        "sentences_after_domain_sentence_gate": int(len(domain_candidates)),
+        "sentences_final_used": int(n_final_used),
+    }
+    _LOGGER.debug("phase_c_domain_filter_stats=%s", stats)
+    return chosen[:DETERMINISTIC_PHASE_C_MAX_FACTS], stats
 
 
-def _select_phase_c_facts(relevant: list[Fact]) -> list[Fact]:
+def _select_phase_c_facts(relevant: list[Fact], *, case_id: str | None = None) -> list[Fact]:
     if not relevant:
         return []
+    debug = bool(case_id in _PHASE_C_DEBUG_IDS)
+    if debug:
+        print(f"[PHASEC] case={case_id} n_chunks={len(relevant)}")
     ordered = sorted(
         relevant,
         key=lambda f: (
@@ -816,6 +1707,22 @@ def _select_phase_c_facts(relevant: list[Fact]) -> list[Fact]:
     selected: list[Fact] = []
     per_doc: dict[str, int] = {}
     for f in ordered:
+        if debug:
+            raw = f.quote
+            raw_type = type(raw).__name__
+            raw_len = len(raw) if isinstance(raw, str) else -1
+            raw_preview = repr(raw[:180]) if isinstance(raw, str) else repr(raw)[:180]
+            cleaned = _clean_text(raw) if isinstance(raw, str) else ""
+            clean_len = len(cleaned)
+            clean_preview = repr(cleaned[:180])
+            print(
+                f"[CHUNK] file={f.pdf} page={int(f.page)} id={f.chunk_id} "
+                f"raw_type={raw_type} raw_len={raw_len} clean_len={clean_len} "
+                f"raw_preview={raw_preview} clean_preview={clean_preview}"
+            )
+            sents_dbg = _split_complete_sentences(cleaned)
+            first_dbg = repr(sents_dbg[0][:120]) if sents_dbg else "NONE"
+            print(f"[SPLIT] n_sents={len(sents_dbg)} first={first_dbg}")
         if _is_noisy_quote(f.quote):
             continue
         if not _extract_clean_requirement_sentences(f.quote, max_items=1):
@@ -867,23 +1774,37 @@ def _confidence_label(relevant: list[Fact]) -> str:
     return "Low"
 
 
-def _phase_c_synthesis(question: str, relevant: list[Fact]) -> tuple[str, list[Citation]]:
+def _phase_c_synthesis(
+    question: str,
+    relevant: list[Fact],
+    *,
+    case_id: str | None = None,
+) -> tuple[str, list[Citation]]:
     lines: list[str] = []
     citations: list[Citation] = []
     used_line_keys: set[tuple[str, int, str, str]] = set()
-    selected = _select_phase_c_facts(relevant)
-    candidates: list[tuple[str, Citation, float]] = []
-    per_fact_limit = 2 if len(selected) > 1 else 3
-    for f in selected:
-        cit = Citation(doc_id=f.pdf, page=f.page, chunk_id=f.chunk_id)
-        for sent in _deterministic_sentences_from_fact(f, max_items=per_fact_limit):
-            candidates.append((sent, cit, float(f.score)))
-            if len(candidates) >= DETERMINISTIC_PHASE_C_MAX_FACTS:
-                break
-        if len(candidates) >= DETERMINISTIC_PHASE_C_MAX_FACTS:
-            break
+    selected = _select_phase_c_facts(relevant, case_id=case_id)
+    candidates, _stats = _phase_c_sentence_candidates(
+        question=question,
+        selected_facts=selected,
+        case_id=case_id,
+    )
 
     if len(candidates) < 2:
+        _fallback_debug(
+            case_id=case_id,
+            branch="phase_c_renderer_precheck_candidates",
+            retrieved_chunks=len(relevant),
+            used_sentences=0,
+            citations_count=0,
+            flags={
+                "no_sentences_before_render": True,
+                "candidates_lt_2": True,
+                "fallback_before_render": False,
+                "fallback_inside_renderer": True,
+                "fallback_after_citation_validation": False,
+            },
+        )
         return "Not found in provided PDFs", []
 
     candidates_by_doc: dict[str, int] = {}
@@ -892,6 +1813,20 @@ def _phase_c_synthesis(question: str, relevant: list[Fact]) -> tuple[str, list[C
     possible_max = sum(min(DETERMINISTIC_MAX_SENTENCES_PER_DOC, n) for n in candidates_by_doc.values())
     target_n = min(DETERMINISTIC_PHASE_C_MAX_FACTS, len(candidates), possible_max)
     if target_n < 2:
+        _fallback_debug(
+            case_id=case_id,
+            branch="phase_c_renderer_target_n",
+            retrieved_chunks=len(relevant),
+            used_sentences=0,
+            citations_count=0,
+            flags={
+                "possible_max_lt_2": True,
+                "target_n_lt_2": True,
+                "fallback_before_render": False,
+                "fallback_inside_renderer": True,
+                "fallback_after_citation_validation": False,
+            },
+        )
         return "Not found in provided PDFs", []
 
     doc_counts: dict[str, int] = {}
@@ -932,6 +1867,19 @@ def _phase_c_synthesis(question: str, relevant: list[Fact]) -> tuple[str, list[C
         doc_counts[cit.doc_id] = doc_counts.get(cit.doc_id, 0) + 1
 
     if len(lines) < 2:
+        _fallback_debug(
+            case_id=case_id,
+            branch="phase_c_renderer_post_selection",
+            retrieved_chunks=len(relevant),
+            used_sentences=len(lines),
+            citations_count=len(citations),
+            flags={
+                "lines_lt_2_after_selection": True,
+                "fallback_before_render": False,
+                "fallback_inside_renderer": True,
+                "fallback_after_citation_validation": False,
+            },
+        )
         return "Not found in provided PDFs", []
 
     distinct_docs = len({c.doc_id for c in citations})
@@ -943,6 +1891,24 @@ def _phase_c_synthesis(question: str, relevant: list[Fact]) -> tuple[str, list[C
     )
     text = "ANSWER:\n" + "\n".join(lines) + f"\nCONFIDENCE: {confidence}"
     return text, citations
+
+
+def _dedupe_citations_stable(
+    citations: list[Citation],
+    *,
+    max_items: int,
+) -> list[Citation]:
+    out: list[Citation] = []
+    seen: set[tuple[str, int, str]] = set()
+    for c in citations:
+        key = (str(c.doc_id), int(c.page), str(c.chunk_id))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(c)
+        if len(out) >= int(max_items):
+            break
+    return out
 
 
 def _phase_c_debug_sentences(text: str, citations: list[Citation]) -> list[dict[str, object]]:
@@ -981,6 +1947,7 @@ def _use_llm_phases() -> bool:
 def answer(
     question: str,
     *,
+    case_id: str | None = None,
     scope: str = "MIXED",
     top_k: int = 5,
     data_dir: Path = Path("data"),
@@ -990,6 +1957,19 @@ def answer(
     del top_k
 
     intent = _intent(question)
+    default_domain_stats = {
+        "domain_key": _domain_key_for_question(question),
+        "N_total_sentences": 0,
+        "N_requirement_bearing": 0,
+        "N_domain_eligible": 0,
+        "domain_filter_used": False,
+        "sentences_extracted_total": 0,
+        "sentences_after_cleaning": 0,
+        "sentences_after_dedupe": 0,
+        "sentences_after_requirement_gate": 0,
+        "sentences_after_domain_sentence_gate": 0,
+        "sentences_final_used": 0,
+    }
 
     facts, phase_a_fallback_used, phase_a_trace = _phase_a_retrieval(
         question,
@@ -1001,9 +1981,40 @@ def answer(
     debug_trace: dict[str, object] = {
         "phase_a": phase_a_trace,
         "phase_b": {"relevant_facts_kept": []},
-        "phase_c": {"answer_sentences": [], "citations": []},
+        "phase_c": {
+            "answer_sentences": [],
+            "citations": [],
+            "domain_filter_stats": default_domain_stats,
+            "zero_sentence_bug": False,
+        },
     }
+    phase_a_attempts = list(phase_a_trace.get("attempts", []) or [])
+    if phase_a_attempts and bool(phase_a_trace.get("fallback_used", False)):
+        phase_a_active_attempt = dict(phase_a_attempts[-1] or {})
+    elif phase_a_attempts:
+        phase_a_active_attempt = dict(phase_a_attempts[0] or {})
+    else:
+        phase_a_active_attempt = {}
+    phase_a_pool_nonempty = bool(
+        int(phase_a_active_attempt.get("pool_size_returned", 0) or 0) > 0
+        and int(phase_a_active_attempt.get("chunks_before", 0) or 0) > 0
+    )
     if not facts:
+        _fallback_debug(
+            case_id=case_id,
+            branch="phase_a_empty",
+            retrieved_chunks=0,
+            used_sentences=0,
+            citations_count=0,
+            flags={
+                "empty_pool": True,
+                "no_passages": True,
+                "no_sentences": True,
+                "fallback_before_render": True,
+                "fallback_inside_renderer": False,
+                "fallback_after_citation_validation": False,
+            },
+        )
         return AnswerResult(
             text="Not found in provided PDFs",
             intent=intent,
@@ -1016,6 +2027,20 @@ def answer(
         )
 
     if _requires_external_live_data(question):
+        _fallback_debug(
+            case_id=case_id,
+            branch="external_live_data_block",
+            retrieved_chunks=len(facts),
+            used_sentences=0,
+            citations_count=0,
+            flags={
+                "scope_blocked": True,
+                "requires_external_live_data": True,
+                "fallback_before_render": True,
+                "fallback_inside_renderer": False,
+                "fallback_after_citation_validation": False,
+            },
+        )
         return AnswerResult(
             text="Not found in provided PDFs",
             intent=intent,
@@ -1032,6 +2057,10 @@ def answer(
         relevant = runner.phase_b_filter(question, facts)
     else:
         relevant = _phase_b_filter(question, facts)
+    phase_c_input_facts = list(relevant)
+    phase_c_precomputed = False
+    text = "Not found in provided PDFs"
+    citations: list[Citation] = []
     phase_b_trace: dict[str, object] = {
         "relevant_facts_kept": [
             {
@@ -1049,23 +2078,148 @@ def answer(
             phase_a_facts=facts,
             phase_a_trace=phase_a_trace,
         )
-        return AnswerResult(
-            text="Not found in provided PDFs",
-            intent=intent,
-            scope=scope,
-            phase_a_fallback_used=phase_a_fallback_used,
-            debug_trace=debug_trace,
-            citations=[],
-            facts=facts,
-            relevant_facts=[],
+        dbg_stats: dict[str, object] = {}
+        if case_id in _PHASE_C_DEBUG_IDS:
+            selected_dbg = _select_phase_c_facts(facts, case_id=case_id)
+            _dbg_chosen, dbg_stats = _phase_c_sentence_candidates(
+                question=question,
+                selected_facts=selected_dbg,
+                case_id=case_id,
+            )
+            phase_c_dbg = dict(debug_trace.get("phase_c", {}) or {})
+            phase_c_dbg["domain_filter_stats"] = dbg_stats
+            debug_trace["phase_c"] = phase_c_dbg
+        check_stats = dbg_stats if dbg_stats else default_domain_stats
+        if phase_a_pool_nonempty and int(check_stats.get("N_total_sentences", 0) or 0) == 0:
+            phase_c_trace = dict(debug_trace.get("phase_c", {}) or {})
+            phase_c_trace["zero_sentence_bug"] = True
+            phase_c_trace["zero_sentence_bug_counts"] = {
+                "sentences_extracted_total": int(
+                    check_stats.get("sentences_extracted_total", 0) or 0
+                ),
+                "sentences_after_cleaning": int(
+                    check_stats.get("sentences_after_cleaning", 0) or 0
+                ),
+                "sentences_after_dedupe": int(
+                    check_stats.get("sentences_after_dedupe", 0) or 0
+                ),
+                "sentences_after_requirement_gate": int(
+                    check_stats.get("sentences_after_requirement_gate", 0) or 0
+                ),
+                "sentences_after_domain_sentence_gate": int(
+                    check_stats.get("sentences_after_domain_sentence_gate", 0) or 0
+                ),
+                "sentences_final_used": int(check_stats.get("sentences_final_used", 0) or 0),
+            }
+            debug_trace["phase_c"] = phase_c_trace
+        if _use_llm_phases():
+            runner = LLMPhaseRunner()
+            phase_b_text, phase_b_citations = runner.phase_c_synthesis(question, facts)
+        else:
+            phase_b_text, phase_b_citations = _phase_c_synthesis(question, facts, case_id=case_id)
+        phase_b_citations = _dedupe_citations_stable(
+            phase_b_citations,
+            max_items=DETERMINISTIC_PHASE_C_MAX_FACTS,
         )
+        phase_b_not_found = (phase_b_text or "").strip() == "Not found in provided PDFs"
+        if (not phase_b_not_found) and bool(phase_b_citations):
+            phase_b_trace["phase_b_relevant_empty_phase_c_from_facts_used"] = True
+            phase_c_input_facts = list(facts)
+            text = phase_b_text
+            citations = phase_b_citations
+            phase_c_precomputed = True
+        else:
+            _fallback_debug(
+                case_id=case_id,
+                branch="phase_b_empty_pre_render",
+                retrieved_chunks=len(facts),
+                used_sentences=int(check_stats.get("sentences_final_used", 0) or 0),
+                citations_count=len(phase_b_citations),
+                flags={
+                    "no_passages": True,
+                    "phase_b_relevant_empty": True,
+                    "phase_a_pool_nonempty": bool(phase_a_pool_nonempty),
+                    "phase_c_from_facts_not_found": phase_b_not_found,
+                    "phase_c_from_facts_citations_empty": len(phase_b_citations) == 0,
+                    "validator_failed": False,
+                    "fallback_before_render": True,
+                    "fallback_inside_renderer": False,
+                    "fallback_after_citation_validation": False,
+                },
+            )
+            return AnswerResult(
+                text="Not found in provided PDFs",
+                intent=intent,
+                scope=scope,
+                phase_a_fallback_used=phase_a_fallback_used,
+                debug_trace=debug_trace,
+                citations=[],
+                facts=facts,
+                relevant_facts=[],
+            )
 
-    if _use_llm_phases():
-        runner = LLMPhaseRunner()
-        text, citations = runner.phase_c_synthesis(question, relevant)
+    if not phase_c_precomputed:
+        phase_c_input_facts = list(relevant)
+        if _use_llm_phases():
+            runner = LLMPhaseRunner()
+            text, citations = runner.phase_c_synthesis(question, phase_c_input_facts)
+        else:
+            text, citations = _phase_c_synthesis(question, phase_c_input_facts, case_id=case_id)
+    citations = _dedupe_citations_stable(
+        citations,
+        max_items=DETERMINISTIC_PHASE_C_MAX_FACTS,
+    )
+    rendered_used_sentences = len(_phase_c_debug_sentences(text, citations))
+    if (text or "").strip() != "Not found in provided PDFs" and not citations:
+        _fallback_debug(
+            case_id=case_id,
+            branch="phase_c_uncited_after_render",
+            retrieved_chunks=len(phase_c_input_facts),
+            used_sentences=rendered_used_sentences,
+            citations_count=0,
+            flags={
+                "uncited_answer": True,
+                "fallback_before_render": False,
+                "fallback_inside_renderer": False,
+                "fallback_after_citation_validation": True,
+            },
+        )
+        text = "Not found in provided PDFs"
+    if (text or "").strip() == "Not found in provided PDFs":
+        _fallback_debug(
+            case_id=case_id,
+            branch="phase_c_not_found_after_render",
+            retrieved_chunks=len(phase_c_input_facts),
+            used_sentences=rendered_used_sentences,
+            citations_count=len(citations),
+            flags={
+                "renderer_returned_not_found": True,
+                "validator_failed": False,
+                "fallback_before_render": False,
+                "fallback_inside_renderer": True,
+                "fallback_after_citation_validation": False,
+            },
+        )
+    _, phase_c_domain_stats = _phase_c_sentence_candidates(
+        question=question,
+        selected_facts=_select_phase_c_facts(phase_c_input_facts, case_id=case_id),
+        case_id=None,
+    )
+    attempts = list(phase_a_trace.get("attempts", []) or [])
+    if attempts and bool(phase_a_trace.get("fallback_used", False)):
+        active_attempt = dict(attempts[-1] or {})
+    elif attempts:
+        active_attempt = dict(attempts[0] or {})
     else:
-        text, citations = _phase_c_synthesis(question, relevant)
-    debug_trace["phase_c"] = {
+        active_attempt = {}
+    pool_size_returned = int(active_attempt.get("pool_size_returned", 0) or 0)
+    chunks_before = int(active_attempt.get("chunks_before", 0) or 0)
+    n_total_sentences = int(phase_c_domain_stats.get("N_total_sentences", 0) or 0)
+    zero_sentence_bug = bool(
+        pool_size_returned > 0 and chunks_before > 0 and n_total_sentences == 0
+    )
+
+    phase_c_trace: dict[str, object] = {
         "answer_sentences": _phase_c_debug_sentences(text, citations),
         "citations": [
             {
@@ -1075,7 +2229,25 @@ def answer(
             }
             for c in citations
         ],
+        "domain_filter_stats": phase_c_domain_stats,
+        "zero_sentence_bug": zero_sentence_bug,
     }
+    if zero_sentence_bug:
+        phase_c_trace["zero_sentence_bug_counts"] = {
+            "sentences_extracted_total": int(
+                phase_c_domain_stats.get("sentences_extracted_total", 0) or 0
+            ),
+            "sentences_after_cleaning": int(
+                phase_c_domain_stats.get("sentences_after_cleaning", 0) or 0
+            ),
+            "sentences_after_requirement_gate": int(
+                phase_c_domain_stats.get("sentences_after_requirement_gate", 0) or 0
+            ),
+            "sentences_after_domain_sentence_gate": int(
+                phase_c_domain_stats.get("sentences_after_domain_sentence_gate", 0) or 0
+            ),
+        }
+    debug_trace["phase_c"] = phase_c_trace
 
     return AnswerResult(
         text=text,
@@ -1085,5 +2257,5 @@ def answer(
         debug_trace=debug_trace,
         citations=citations,
         facts=facts,
-        relevant_facts=relevant,
+        relevant_facts=phase_c_input_facts,
     )

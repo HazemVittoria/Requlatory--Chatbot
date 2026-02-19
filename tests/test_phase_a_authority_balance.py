@@ -90,7 +90,7 @@ def test_phase_a_balancing_preserves_single_authority_top_results(monkeypatch):
 
     assert fallback_used is False
     assert len(facts) == qa_module.MAX_CONTEXT_CHUNKS
-    assert [f.chunk_id for f in facts] == [f"p{i}_c1" for i in range(1, 7)]
+    assert [f.chunk_id for f in facts] == [f"p{i}_c1" for i in range(1, qa_module.MAX_CONTEXT_CHUNKS + 1)]
     assert trace["balancing"]["authorities_kept"] == ["FDA"]
 
 

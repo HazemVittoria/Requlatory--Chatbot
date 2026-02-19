@@ -26,7 +26,11 @@ def test_expected_not_found_passes_on_exact_refusal(monkeypatch, tmp_path: Path)
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(er, "answer", lambda question, scope="MIXED": _FakeResult("Not found in provided PDFs", []))
+    monkeypatch.setattr(
+        er,
+        "answer",
+        lambda question, scope="MIXED", case_id=None: _FakeResult("Not found in provided PDFs", []),
+    )
     out = er.run_eval(golden)
     assert out["passed"] == 1
     assert out["metrics"]["correct_refusal"] == 1
@@ -53,7 +57,11 @@ def test_expected_not_found_fails_if_content_returned(monkeypatch, tmp_path: Pat
             self.page = 1
             self.chunk_id = "p1_c1"
 
-    monkeypatch.setattr(er, "answer", lambda question, scope="MIXED": _FakeResult("Some answer", [_C()]))
+    monkeypatch.setattr(
+        er,
+        "answer",
+        lambda question, scope="MIXED", case_id=None: _FakeResult("Some answer", [_C()]),
+    )
     out = er.run_eval(golden)
     assert out["passed"] == 0
     assert out["metrics"]["hallucination"] == 1

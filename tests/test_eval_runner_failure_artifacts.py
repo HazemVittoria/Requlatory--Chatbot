@@ -44,7 +44,11 @@ def test_failure_case_writes_debug_artifact(monkeypatch, tmp_path: Path):
     )
 
     monkeypatch.setattr(er, "validate_index_integrity", lambda print_report=True: _FakeIndexReport())
-    monkeypatch.setattr(er, "answer", lambda question, scope="MIXED": _FakeResult())
+    monkeypatch.setattr(
+        er,
+        "answer",
+        lambda question, scope="MIXED", case_id=None: _FakeResult(),
+    )
 
     out = er.run_eval(golden)
     assert out["passed"] == 0
@@ -80,7 +84,11 @@ def test_success_only_run_has_no_failure_artifacts(monkeypatch, tmp_path: Path):
             self.text = "Not found in provided PDFs"
 
     monkeypatch.setattr(er, "validate_index_integrity", lambda print_report=True: _FakeIndexReport())
-    monkeypatch.setattr(er, "answer", lambda question, scope="MIXED": _OkResult())
+    monkeypatch.setattr(
+        er,
+        "answer",
+        lambda question, scope="MIXED", case_id=None: _OkResult(),
+    )
 
     out = er.run_eval(golden)
     assert out["passed"] == 1

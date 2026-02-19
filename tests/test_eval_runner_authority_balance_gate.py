@@ -62,7 +62,11 @@ def test_balance_gate_fails_when_eligible_but_missing(monkeypatch, tmp_path: Pat
     }
 
     monkeypatch.setattr(er, "validate_index_integrity", lambda print_report=True: _FakeIndexReport())
-    monkeypatch.setattr(er, "answer", lambda question, scope="MIXED": _FakeResult(phase_a_trace))
+    monkeypatch.setattr(
+        er,
+        "answer",
+        lambda question, scope="MIXED", case_id=None: _FakeResult(phase_a_trace),
+    )
 
     out = er.run_eval(golden)
     assert out["passed"] == 0
@@ -91,7 +95,11 @@ def test_balance_gate_skips_when_not_eligible(monkeypatch, tmp_path: Path):
     }
 
     monkeypatch.setattr(er, "validate_index_integrity", lambda print_report=True: _FakeIndexReport())
-    monkeypatch.setattr(er, "answer", lambda question, scope="MIXED": _FakeResult(phase_a_trace))
+    monkeypatch.setattr(
+        er,
+        "answer",
+        lambda question, scope="MIXED", case_id=None: _FakeResult(phase_a_trace),
+    )
 
     out = er.run_eval(golden)
     assert out["passed"] == 1

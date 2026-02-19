@@ -30,8 +30,8 @@ def test_fallback_usage_metrics_and_threshold_not_exceeded(monkeypatch, tmp_path
     rows.append({"id": 11, "question": "q11", "expected_not_found": True})
     golden.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
-    def _fake_answer(question: str, scope: str = "MIXED"):
-        del scope
+    def _fake_answer(question: str, scope: str = "MIXED", case_id: str | None = None):
+        del scope, case_id
         # 1/10 answerable queries uses fallback => 0.10 (below 0.15 threshold).
         if question == "q1":
             return _FakeResult("Some answer", [_FakeCitation()], True)
@@ -59,8 +59,8 @@ def test_fallback_usage_threshold_exceeded_sets_ci_fail(monkeypatch, tmp_path: P
     ]
     golden.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
-    def _fake_answer(question: str, scope: str = "MIXED"):
-        del scope
+    def _fake_answer(question: str, scope: str = "MIXED", case_id: str | None = None):
+        del scope, case_id
         if question in {"q1", "q2"}:
             return _FakeResult("Some answer", [_FakeCitation()], True)
         return _FakeResult("Some answer", [_FakeCitation()], False)

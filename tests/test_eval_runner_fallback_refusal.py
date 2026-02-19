@@ -58,7 +58,7 @@ def test_fallback_retrieval_still_results_in_correct_refusal(monkeypatch, tmp_pa
     monkeypatch.setattr(qa, "search_chunks", _fake_search_chunks)
 
     out = er.run_eval(golden)
-    assert calls == [0.20, 0.18]
+    assert calls == [0.20, 0.20, 0.18]
     assert out["passed"] == 1
     assert out["metrics"]["correct_refusal"] == 1
     assert out["metrics"]["hallucination"] == 0
