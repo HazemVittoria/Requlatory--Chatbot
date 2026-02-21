@@ -1,0 +1,8 @@
+ANSWER:
+1) Requirement: Such audit trail documentation shall be retained for a period at least as long as that required for the subject electronic records and shall be available for agency review. (21-CFR-Part-11-as-of-26Mar2025.pdf, p4, p4_c3)
+2) Requirement: (2)Revision and change control procedures to maintain an audit trail that documents time-sequenced development and modiEcation of systems documentation. (21-CFR-Part-11-as-of-26Mar2025.pdf, p5, p5_c2)
+CONFIDENCE: Medium
+
+Citations:
+- 21-CFR-Part-11-as-of-26Mar2025.pdf | p4 | p4_c3
+- 21-CFR-Part-11-as-of-26Mar2025.pdf | p5 | p5_c2

@@ -1,0 +1,9 @@
+ANSWER:
+1) Requirement: (A)Validation of systems to ensure accuracy, reliability, consistent intended performance, and the ability to discern invalid or altered records. (21-CFR-Part-11-as-of-26Mar2025.pdf, p4, p4_c2)
+2) Requirement: Have much in common with requirements for other GxP sectors, (e.g. (PI 011-3 Recommendation on Computerised Systems.pdf, p9, p9_c4)
+3) Requirement: (B)The ability to generate accurate and complete copies of records in both human readable and electronic form suitable for inspection, review, and copying by the agency. (21-CFR-Part-11-as-of-26Mar2025.pdf, p4, p4_c2)
+CONFIDENCE: High
+
+Citations:
+- 21-CFR-Part-11-as-of-26Mar2025.pdf | p4 | p4_c2
+- PI 011-3 Recommendation on Computerised Systems.pdf | p9 | p9_c4

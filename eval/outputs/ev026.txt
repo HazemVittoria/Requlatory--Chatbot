@@ -1,0 +1,7 @@
+ANSWER:
+1) Requirement: GxPs have required the vali dation of computerised systems for many years. (PI 011-3 Recommendation on Computerised Systems.pdf, p24, p24_c1)
+2) Requirement: It should therefore be noted that a lack of prospec tive validation evidence for computerised systems would increasingly be seen as a serious deviation from GxPs by a number. (PI 011-3 Recommendation on Computerised Systems.pdf, p24, p24_c1)
+CONFIDENCE: Medium
+
+Citations:
+- PI 011-3 Recommendation on Computerised Systems.pdf | p24 | p24_c1

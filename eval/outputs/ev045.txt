@@ -1,0 +1,7 @@
+ANSWER:
+1) Requirement: Investigations must be included in the review. (Manual-022-Annual-Product-Reviews.pdf, p4, p4_c1)
+2) Requirement: Established specification is the external registered specification. (Manual-022-Annual-Product-Reviews.pdf, p4, p4_c1)
+CONFIDENCE: Medium
+
+Citations:
+- Manual-022-Annual-Product-Reviews.pdf | p4 | p4_c1

@@ -1,0 +1,7 @@
+ANSWER:
+1) Requirement: ) And supporting procedures) are key outputs of Stage 1, process design. (Process-Validation--General-Principles-and-Practices.pdf, p20, p20_c2)
+2) Requirement: Documentation requirements are greatest during Stage 2, process qualification, and Stage 3, continued process verification. (Process-Validation--General-Principles-and-Practices.pdf, p20, p20_c2)
+CONFIDENCE: Medium
+
+Citations:
+- Process-Validation--General-Principles-and-Practices.pdf | p20 | p20_c2

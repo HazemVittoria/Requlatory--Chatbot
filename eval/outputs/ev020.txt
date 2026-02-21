@@ -1,0 +1,8 @@
+ANSWER:
+1) Requirement: As the above example illustrates, any decision to release a batch, in spite of an initial OOS result that has not been invalidated, should come only after a full investigation. (19287685_L2-OOS.pdf, p16, p16_c2)
+2) Requirement: In the first case (OOS confirmed), the investigation changes from an OOS investigation into a batch failure investigation, which must be extended to other batches or products that may have. (19287685_L2-OOS.pdf, p15, p15_c3)
+CONFIDENCE: Low
+
+Citations:
+- 19287685_L2-OOS.pdf | p16 | p16_c2
+- 19287685_L2-OOS.pdf | p15 | p15_c3

@@ -1,0 +1,7 @@
+ANSWER:
+1) Requirement: The procedure and extent of verification should dictate which validation characteristic tests should be included in the protocol (e.g., specificity, LOD, LOQ, precision, accuracy). (Analytical-Procedures-and-Methods-Validation-for-Drugs-and-Biologics.pdf, p11, p11_c3)
+2) Requirement: Considerations that may influence what characteristic tests should be in the protocol may depend on situations such as whether specification limits are set tighter than compendial acceptance criteria, or RT. (Analytical-Procedures-and-Methods-Validation-for-Drugs-and-Biologics.pdf, p11, p11_c3)
+CONFIDENCE: Medium
+
+Citations:
+- Analytical-Procedures-and-Methods-Validation-for-Drugs-and-Biologics.pdf | p11 | p11_c3

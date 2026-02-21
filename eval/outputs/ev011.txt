@@ -1,0 +1,9 @@
+ANSWER:
+1) Requirement: CAPA should continue after the product is discontinued. (Q10.pdf, p13, p13_c3)
+2) Requirement: Such investigations should be given the highest priority. (19287685_L2-OOS.pdf, p9, p9_c1)
+3) Requirement: CAPA should be used and the effectiveness of the actions should be evaluated. (Q10.pdf, p13, p13_c3)
+CONFIDENCE: High
+
+Citations:
+- Q10.pdf | p13 | p13_c3
+- 19287685_L2-OOS.pdf | p9 | p9_c1

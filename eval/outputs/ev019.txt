@@ -1,0 +1,7 @@
+ANSWER:
+1) Requirement: Such investigations should be given the highest priority. (19287685_L2-OOS.pdf, p9, p9_c1)
+2) Requirement: Both the initial laboratory assessment and the following OOS investigation should be documented fully. (19287685_L2-OOS.pdf, p9, p9_c1)
+CONFIDENCE: Medium
+
+Citations:
+- 19287685_L2-OOS.pdf | p9 | p9_c1

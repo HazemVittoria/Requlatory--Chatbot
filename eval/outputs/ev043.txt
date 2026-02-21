@@ -1,0 +1,9 @@
+ANSWER:
+1) Requirement: A deviation from GMP or procedure with no impact on product quality. (Manual-022-Annual-Product-Reviews.pdf, p2, p2_c1)
+2) Requirement: The selected preventive action should be evaluated and recorded, and the system should be monitored for the effectiveness of the action. (Quality-Systems-Approach-to-Pharmaceutical-cGMP-Regulations.pdf, p27, p27_c1)
+3) Requirement: An isolated event or deviation from an agreed/approved procedure or process that normally results in a rapid corrective action or establishment of such corrective actions. (Manual-022-Annual-Product-Reviews.pdf, p2, p2_c1)
+CONFIDENCE: Medium
+
+Citations:
+- Manual-022-Annual-Product-Reviews.pdf | p2 | p2_c1
+- Quality-Systems-Approach-to-Pharmaceutical-cGMP-Regulations.pdf | p27 | p27_c1

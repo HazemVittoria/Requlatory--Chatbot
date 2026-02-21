@@ -1,0 +1,7 @@
+ANSWER:
+1) Requirement: Requires data review before batch release. (Data Integrity and Compliance_cGMP.pdf, p12, p12_c2)
+2) Requirement: In these cases, you would apply the same review frequency for the audit trail. (Data Integrity and Compliance_cGMP.pdf, p12, p12_c2)
+CONFIDENCE: Medium
+
+Citations:
+- Data Integrity and Compliance_cGMP.pdf | p12 | p12_c2

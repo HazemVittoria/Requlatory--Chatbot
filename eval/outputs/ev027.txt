@@ -1,0 +1,8 @@
+ANSWER:
+1) Requirement: ■ Evaluation to ensure that computerized systems remain in a validated state; (trs1033-annex4-guideline-on-data-integrity.pdf, p24, p24_c3)
+2) Requirement: Annex is structured to cover project-phase controls (like validation planning, user requirements, and supplier assessment) as well as operational-phase controls (such as data accuracy checks, incident management, change control, periodic. (gamp-5-computerized-system-validation-in-pharma.pdf, p5, p5_c2)
+CONFIDENCE: Medium
+
+Citations:
+- trs1033-annex4-guideline-on-data-integrity.pdf | p24 | p24_c3
+- gamp-5-computerized-system-validation-in-pharma.pdf | p5 | p5_c2

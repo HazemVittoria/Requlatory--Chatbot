@@ -1,0 +1,7 @@
+ANSWER:
+1) Requirement: The Annual Product review is concerning drug products intended for the US market. (Manual-022-Annual-Product-Reviews.pdf, p1, p1_c1)
+2) Requirement: The purpose of this Guideline is to provide requirements for the content, scope and procedures for developing Annual Product Reviews and Product Quality Reviews, and also to outline recommendations. (Manual-022-Annual-Product-Reviews.pdf, p1, p1_c1)
+CONFIDENCE: Medium
+
+Citations:
+- Manual-022-Annual-Product-Reviews.pdf | p1 | p1_c1

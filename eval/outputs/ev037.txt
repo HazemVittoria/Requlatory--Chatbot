@@ -1,0 +1,8 @@
+ANSWER:
+1) Requirement: All citations to parts and in this document pertain to finished pharmaceuticals and PET drugs, but these requirements are also consistent with Agency guidance on CGMP for active pharmaceutical ingredients. (Data Integrity and Compliance_cGMP.pdf, p5, p5_c2)
+2) Requirement: (B) to maintain a backup file of data. (Data Integrity and Compliance_cGMP.pdf, p9, p9_c3)
+CONFIDENCE: Medium
+
+Citations:
+- Data Integrity and Compliance_cGMP.pdf | p5 | p5_c2
+- Data Integrity and Compliance_cGMP.pdf | p9 | p9_c3

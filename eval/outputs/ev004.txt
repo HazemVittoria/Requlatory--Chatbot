@@ -1,0 +1,7 @@
+ANSWER:
+1) Requirement: They should, however, be conducted in accordance with sound scientific methods and principles, including good documentation practices. (Process-Validation--General-Principles-and-Practices.pdf, p11, p11_c2)
+2) Requirement: Decisions and justification of the controls should be sufficiently documented and internally reviewed to verify and preserve their value for use or adaptation later in the lifecycle of the process. (Process-Validation--General-Principles-and-Practices.pdf, p11, p11_c2)
+CONFIDENCE: Medium
+
+Citations:
+- Process-Validation--General-Principles-and-Practices.pdf | p11 | p11_c2

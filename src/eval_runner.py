@@ -179,6 +179,7 @@ def _write_failure_artifact(
         phase_c["citations"] = [
             {
                 "pdf": c.doc_id,
+                "citation": str(getattr(c, "doc_title", "") or c.doc_id),
                 "page": int(c.page),
                 "chunk_id": c.chunk_id,
             }
@@ -507,8 +508,9 @@ def run_baseline_eval(
                 out_lines = [text, "", "Citations:"]
                 if citations:
                     for cit in citations:
+                        doc_label = str(getattr(cit, "doc_title", "") or getattr(cit, "doc_id", ""))
                         out_lines.append(
-                            f"- {getattr(cit, 'doc_id', '')} | p{int(getattr(cit, 'page', 0) or 0)} | {getattr(cit, 'chunk_id', '')}"
+                            f"- {doc_label} | p{int(getattr(cit, 'page', 0) or 0)} | {getattr(cit, 'chunk_id', '')}"
                         )
                 else:
                     out_lines.append("- none")
@@ -623,6 +625,9 @@ def run_eval(golden_path: Path = Path("golden_set.jsonl")) -> dict[str, Any]:
                 "phase_a_fallback_used": phase_a_fallback_used,
                 "answer": text,
                 "citations": [f"{x.doc_id}|p{x.page}|{x.chunk_id}" for x in citations],
+                "citations_display": [
+                    f"{str(getattr(x, 'doc_title', '') or x.doc_id)}|p{x.page}|{x.chunk_id}" for x in citations
+                ],
             }
         )
 

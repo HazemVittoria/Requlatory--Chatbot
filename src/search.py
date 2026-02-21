@@ -14,7 +14,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from .ingestion import build_corpus
 
 _CACHE_FILE = Path(".cache") / "retrieval_index.pkl"
-_CACHE_VERSION = "v2-with-internal-sop-tagging"
+_CACHE_VERSION = "v4-filename-citation"
 
 _TOKEN_RE = re.compile(r"[a-zA-Z]{3,}")
 _BROAD_REQUIREMENT_INCLUDE_TERMS = (

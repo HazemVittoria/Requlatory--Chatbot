@@ -1,0 +1,8 @@
+ANSWER:
+1) Requirement: ■ Evaluation to ensure that computerized systems remain in a validated state; (trs1033-annex4-guideline-on-data-integrity.pdf, p24, p24_c3)
+2) Requirement: A foundational requirement of Part is system validation. (gamp-5-computerized-system-validation-in-pharma.pdf, p4, p4_c6)
+CONFIDENCE: Medium
+
+Citations:
+- trs1033-annex4-guideline-on-data-integrity.pdf | p24 | p24_c3
+- gamp-5-computerized-system-validation-in-pharma.pdf | p4 | p4_c6

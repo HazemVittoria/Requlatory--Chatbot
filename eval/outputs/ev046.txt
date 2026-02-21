@@ -1,0 +1,7 @@
+ANSWER:
+1) Requirement: And a greater reliance on internal documentation to define the criteria and limits required. (Manual-053-Laboratory-Equipment-Qualification.pdf, p3, p3_c1)
+2) Requirement: The outcome of all these stages must be summarized and reported(as a single document/report). (Manual-053-Laboratory-Equipment-Qualification.pdf, p3, p3_c1)
+CONFIDENCE: Medium
+
+Citations:
+- Manual-053-Laboratory-Equipment-Qualification.pdf | p3 | p3_c1

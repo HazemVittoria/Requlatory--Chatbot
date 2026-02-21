@@ -1,0 +1,7 @@
+ANSWER:
+1) Requirement: For biological products under BLAs, qualification of subsequent reference standard lots should be included in annual reports. (Analytical-Procedures-and-Methods-Validation-for-Drugs-and-Biologics.pdf, p9, p9_c3)
+2) Requirement: Information supporting reference standards and materials should include qualification test reports and certificates of analysis (including stability protocols, reports, and relevant known impurity profile information) as applicable. (Analytical-Procedures-and-Methods-Validation-for-Drugs-and-Biologics.pdf, p9, p9_c3)
+CONFIDENCE: Low
+
+Citations:
+- Analytical-Procedures-and-Methods-Validation-for-Drugs-and-Biologics.pdf | p9 | p9_c3

@@ -1,0 +1,8 @@
+ANSWER:
+1) Requirement: In these cases, you would apply the same review frequency for the audit trail. (Data Integrity and Compliance_cGMP.pdf, p12, p12_c2)
+2) Requirement: The data and records should be ‘attributable, legible, contemporaneous, original’ and accurate, complete, consistent, enduring, and available; (trs1033-annex4-guideline-on-data-integrity.pdf, p2, p2_c2)
+CONFIDENCE: Medium
+
+Citations:
+- Data Integrity and Compliance_cGMP.pdf | p12 | p12_c2
+- trs1033-annex4-guideline-on-data-integrity.pdf | p2 | p2_c2

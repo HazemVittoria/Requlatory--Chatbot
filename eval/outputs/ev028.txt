@@ -1,0 +1,12 @@
+ANSWER:
+1) Requirement: Requirements also need to define non-software (e.g. (PI 011-3 Recommendation on Computerised Systems.pdf, p15, p15_c1)
+2) Requirement: User requirements specification (URS) in a URS and/or a functional specification. (pe-009-17-gmp-guide-xannexes.pdf, p221, p221_c2)
+3) Requirement: /Head2right There should be no conflict between requirements. (PI 011-3 Recommendation on Computerised Systems.pdf, p15, p15_c1)
+4) Requirement: The URS should be a point of reference throughout the validation life cycle. (pe-009-17-gmp-guide-xannexes.pdf, p221, p221_c2)
+5) Requirement: Thus, validation should be supplemented by appropriate administrative and physical controls, as wells as training of users. (PI 041-1 Guidance on Data Integrity.pdf, p33, p33_c1)
+CONFIDENCE: High
+
+Citations:
+- PI 011-3 Recommendation on Computerised Systems.pdf | p15 | p15_c1
+- pe-009-17-gmp-guide-xannexes.pdf | p221 | p221_c2
+- PI 041-1 Guidance on Data Integrity.pdf | p33 | p33_c1

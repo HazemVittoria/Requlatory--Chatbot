@@ -1,0 +1,10 @@
+ANSWER:
+1) Requirement: Sampling sites should be justified. (Sterile-Drug-Products-Produced-by-Aseptic-Processing-—-cGMP.pdf, p18, p18_c4)
+2) Requirement: (Ii) A review of critical in-process controls and finished product results; (pe-009-17-gmp-guide-part-i-basic-requirements-for-medicinal.pdf, p9, p9_c2)
+3) Requirement: To protect exposed sterilized product, personnel should to maintain gown quality and strictly adhere to appropriate aseptic techniques. (Sterile-Drug-Products-Produced-by-Aseptic-Processing-—-cGMP.pdf, p18, p18_c4)
+4) Requirement: (V) A review of all changes carried out to the processes or analytical methods; (pe-009-17-gmp-guide-part-i-basic-requirements-for-medicinal.pdf, p9, p9_c2)
+CONFIDENCE: Low
+
+Citations:
+- Sterile-Drug-Products-Produced-by-Aseptic-Processing-—-cGMP.pdf | p18 | p18_c4
+- pe-009-17-gmp-guide-part-i-basic-requirements-for-medicinal.pdf | p9 | p9_c2

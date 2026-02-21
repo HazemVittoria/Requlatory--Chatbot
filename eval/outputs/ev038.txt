@@ -1,0 +1,7 @@
+ANSWER:
+1) Requirement: Required to reconstruct the CGMP activity and the static or dynamic nature of the original records. (Data Integrity and Compliance_cGMP.pdf, p13, p13_c1)
+2) Requirement: In this case, the paper printout or static record, or a true copy, must be retained (§ . (Data Integrity and Compliance_cGMP.pdf, p13, p13_c1)
+CONFIDENCE: Medium
+
+Citations:
+- Data Integrity and Compliance_cGMP.pdf | p13 | p13_c1

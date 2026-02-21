@@ -1,0 +1,10 @@
+ANSWER:
+1) Requirement: These arrangements ensure that data, irrespective of the process, format or technology in which it is generated, recorded, processed, retained, retrieved and used will ensure a n attributable, legible, contemporaneous,. (PI 041-1 Guidance on Data Integrity.pdf, p5, p5_c3)
+2) Requirement: In these cases, you would apply the same review frequency for the audit trail. (Data Integrity and Compliance_cGMP.pdf, p12, p12_c2)
+3) Requirement: Audit trail review is similar to assessing cross-outs on paper when reviewing data. (Data Integrity and Compliance_cGMP.pdf, p12, p12_c1)
+CONFIDENCE: High
+
+Citations:
+- PI 041-1 Guidance on Data Integrity.pdf | p5 | p5_c3
+- Data Integrity and Compliance_cGMP.pdf | p12 | p12_c2
+- Data Integrity and Compliance_cGMP.pdf | p12 | p12_c1

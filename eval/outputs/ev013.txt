@@ -1,0 +1,8 @@
+ANSWER:
+1) Requirement: Interpretation of Investigation Results The QU is responsible for interpreting the results of the investigation. (19287685_L2-OOS.pdf, p15, p15_c2)
+2) Requirement: In the first case (OOS confirmed), the investigation changes from an OOS investigation into a batch failure investigation, which must be extended to other batches or products that may have. (19287685_L2-OOS.pdf, p15, p15_c3)
+CONFIDENCE: Medium
+
+Citations:
+- 19287685_L2-OOS.pdf | p15 | p15_c2
+- 19287685_L2-OOS.pdf | p15 | p15_c3

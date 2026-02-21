@@ -21,6 +21,15 @@ _SECTION_PREFIX_RE = re.compile(r"^\s*(?:annex|chapter|section|part|appendix|mod
 _NUMBERED_HEADING_RE = re.compile(r"^\s*(?:\d+(?:\.\d+){0,4}|[ivxlcdm]{1,8})[.)]?\s+[A-Z].{2,}$")
 _ALL_CAPS_HEADING_RE = re.compile(r"^[A-Z0-9][A-Z0-9 \-(),/&]{4,}$")
 _HYPHENATED_END_RE = re.compile(r"[A-Za-z]{2,}-$")
+_TITLE_DROP_RE = re.compile(r"^\s*(?:untitled|document\d*|none|null|na|n/a)\s*$", flags=re.IGNORECASE)
+
+_GENERIC_TITLE_LINES = {
+    "table of contents",
+    "contents",
+    "introduction",
+    "purpose",
+    "scope",
+}
 
 
 AUTHORITY_BY_FOLDER = {
@@ -121,6 +130,93 @@ def _merge_hyphenated_linebreaks(lines: list[str]) -> list[str]:
 def _split_sentences(text: str) -> list[str]:
     parts = re.split(r"(?<=[.!?])\s+", (text or "").strip())
     return [p.strip() for p in parts if p.strip()]
+
+
+def _clean_title_value(raw: str) -> str:
+    s = _normalize_line(raw)
+    s = s.strip(" -_:;,.")
+    if not s:
+        return ""
+    if _TITLE_DROP_RE.match(s):
+        return ""
+    if len(s) < 6:
+        return ""
+    letters = sum(1 for ch in s if ch.isalpha())
+    if letters < 4:
+        return ""
+    return s
+
+
+def _metadata_title(reader: PdfReader) -> str:
+    try:
+        md = reader.metadata
+    except Exception:
+        md = None
+    if md is None:
+        return ""
+    raw = ""
+    try:
+        raw = str(getattr(md, "title", "") or "")
+    except Exception:
+        raw = ""
+    if not raw:
+        try:
+            raw = str(md.get("/Title") or "")
+        except Exception:
+            raw = ""
+    return _clean_title_value(raw)
+
+
+def _heading_like_score(line: str) -> int:
+    s = _normalize_line(line)
+    if not s:
+        return -1
+    sl = s.lower()
+    if sl in _GENERIC_TITLE_LINES:
+        return -1
+    if _is_artifact(s):
+        return -1
+    score = 0
+    if _is_heading(s):
+        score += 3
+    n_words = len(s.split())
+    if 3 <= n_words <= 18:
+        score += 2
+    if len(s) <= 140:
+        score += 1
+    if re.search(r"\b(guidance|guideline|gmp|quality|validation|integrity|annex|cfr|ich)\b", sl):
+        score += 1
+    return score
+
+
+def _title_from_first_page(page_records: list[dict[str, Any]]) -> str:
+    if not page_records:
+        return ""
+    lines = list(page_records[0].get("lines", []))
+    best_line = ""
+    best_score = -1
+    for raw in lines[:100]:
+        line = _normalize_line(str(raw))
+        score = _heading_like_score(line)
+        if score > best_score:
+            best_score = score
+            best_line = line
+    if best_score < 0:
+        return ""
+    return _clean_title_value(best_line)
+
+
+def _citation_title(reader: PdfReader, page_records: list[dict[str, Any]], fallback_name: str) -> str:
+    title = _metadata_title(reader)
+    if title:
+        return title
+    title = _title_from_first_page(page_records)
+    if title:
+        return title
+    stem = _clean_title_value(Path(fallback_name).stem.replace("_", " ").replace("-", " "))
+    if stem:
+        return stem
+    return str(fallback_name)
 
 
 def _build_blocks(lines: list[str]) -> list[dict[str, str]]:
@@ -235,6 +331,7 @@ def ingest_pdf(
 
     min_df = max(2, int(math.ceil(max(1, len(page_records)) * repeat_line_doc_frequency)))
     repeated = {line for line, freq in line_df.items() if freq >= min_df}
+    citation_title = pdf_path.name
 
     out: list[dict[str, Any]] = []
     for rec in page_records:
@@ -260,6 +357,7 @@ def ingest_pdf(
                     "source_type": "INTERNAL_SOP" if authority == "SOP" else "REGULATORY",
                     "is_internal_sop": bool(authority == "SOP"),
                     "file": pdf_path.name,
+                    "citation": citation_title,
                     "source_pdf_name": pdf_path.name,
                     "page": page,
                     "section": chunk.get("section") or "Unknown",

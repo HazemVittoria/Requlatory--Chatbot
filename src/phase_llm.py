@@ -363,6 +363,13 @@ def _question_keywords(question: str) -> set[str]:
     return {t for t in toks if t not in _TOPIC_STOP}
 
 
+def _citation_label(doc_id: str, doc_title: str) -> str:
+    title = str(doc_title or "").strip()
+    if title:
+        return title
+    return str(doc_id or "").strip()
+
+
 class LLMPhaseRunner:
     def __init__(
         self,
@@ -506,7 +513,16 @@ def _validate_relevant_facts(obj: dict[str, Any], source_facts: list[Fact], ques
             continue
         src = source_index[key]
         quote = str(row.get("quote") or src.quote).strip() or src.quote
-        out.append(Fact(quote=quote, pdf=pdf, page=page, chunk_id=chunk_id, score=float(src.score)))
+        out.append(
+            Fact(
+                quote=quote,
+                pdf=pdf,
+                page=page,
+                chunk_id=chunk_id,
+                score=float(src.score),
+                doc_title=src.doc_title,
+            )
+        )
         seen.add(key)
     return _enforce_phase_b_requirement_filter(question=question, facts=out, source_facts=source_facts)
 
@@ -557,11 +573,14 @@ def _validate_synthesis(
         key = (pdf, page, chunk_id)
         if key in used or key not in rel_index:
             continue
-        src_quote = rel_index[key].quote
+        src = rel_index[key]
+        src_quote = src.quote
         if _is_quote_dump(sentence, src_quote):
             continue
-        lines.append(f"{len(lines)+1}) {sentence} ({pdf}, p{page}, {chunk_id})")
-        cits.append(Citation(doc_id=pdf, page=page, chunk_id=chunk_id))
+        lines.append(
+            f"{len(lines)+1}) {sentence} ({_citation_label(pdf, src.doc_title)}, p{page}, {chunk_id})"
+        )
+        cits.append(Citation(doc_id=pdf, page=page, chunk_id=chunk_id, doc_title=src.doc_title))
         used.add(key)
 
     if not lines:

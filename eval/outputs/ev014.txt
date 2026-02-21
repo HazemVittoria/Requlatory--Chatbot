@@ -1,0 +1,9 @@
+ANSWER:
+1) Requirement: CAPA should continue after the product is discontinued. (Q10.pdf, p13, p13_c3)
+2) Requirement: If deviations associated with post -approval changes are detected, ensures that the issue is managed via the company’s deviation management process and appropriate corrective and/or preventive actions are identified. (Q12_Guideline_Step4_2019_1119.pdf, p30, p30_c2)
+3) Requirement: CAPA should be used and the effectiveness of the actions should be evaluated. (Q10.pdf, p13, p13_c3)
+CONFIDENCE: High
+
+Citations:
+- Q10.pdf | p13 | p13_c3
+- Q12_Guideline_Step4_2019_1119.pdf | p30 | p30_c2

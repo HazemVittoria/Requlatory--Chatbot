@@ -1,0 +1,7 @@
+ANSWER:
+1) Requirement: This is consistent with the annual review approach. (Quality-Systems-Approach-to-Pharmaceutical-cGMP-Regulations.pdf, p25, p25_c2)
+2) Requirement: (E)) require product review on at least an annual basis, a quality systems approach calls for trending on a more frequent basis as determined by risk. (Quality-Systems-Approach-to-Pharmaceutical-cGMP-Regulations.pdf, p25, p25_c2)
+CONFIDENCE: Medium
+
+Citations:
+- Quality-Systems-Approach-to-Pharmaceutical-cGMP-Regulations.pdf | p25 | p25_c2

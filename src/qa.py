@@ -262,6 +262,13 @@ def _fallback_debug(
     )
 
 
+def _citation_label(doc_id: str, doc_title: str) -> str:
+    title = str(doc_title or "").strip()
+    if title:
+        return title
+    return str(doc_id or "").strip()
+
+
 def _intent(question: str) -> str:
     q = (question or "").strip().lower()
     if q.startswith("what is") or q.startswith("define") or "constitutes" in q:
@@ -1090,13 +1097,16 @@ def _phase_a_retrieval(
     chunks, balance_trace = _balance_phase_a_chunks(chunks, target_k=MAX_CONTEXT_CHUNKS)
     out: list[Fact] = []
     for c in chunks:
+        pdf_name = str(c.get("file") or "")
+        citation_title = str(c.get("source_pdf_name") or pdf_name)
         out.append(
             Fact(
                 quote=str(c.get("text") or ""),
-                pdf=str(c.get("file") or ""),
+                pdf=pdf_name,
                 page=int(c.get("page") or 0),
                 chunk_id=str(c.get("chunk_id") or ""),
                 score=float(c.get("_score", 0.0)),
+                doc_title=_citation_label(pdf_name, citation_title),
             )
         )
     trace = {
@@ -1586,7 +1596,7 @@ def _phase_c_sentence_candidates(
     reasons_domain: list[str] = []
     per_fact_limit = 2 if len(selected_facts) > 1 else 3
     for f in selected_facts:
-        cit = Citation(doc_id=f.pdf, page=f.page, chunk_id=f.chunk_id)
+        cit = Citation(doc_id=f.pdf, page=f.page, chunk_id=f.chunk_id, doc_title=f.doc_title)
         extracted, stage_counts, stage_reasons = _extract_clean_requirement_sentences_with_trace(
             f.quote,
             max_items=per_fact_limit,
@@ -1844,7 +1854,7 @@ def _phase_c_synthesis(
         if line_key in used_line_keys:
             continue
         n = len(lines) + 1
-        lines.append(f"{n}) {sent} ({cit.doc_id}, p{cit.page}, {cit.chunk_id})")
+        lines.append(f"{n}) {sent} ({_citation_label(cit.doc_id, cit.doc_title)}, p{cit.page}, {cit.chunk_id})")
         citations.append(cit)
         selected_scores.append(float(sc))
         used_line_keys.add(line_key)
@@ -1860,7 +1870,7 @@ def _phase_c_synthesis(
         if line_key in used_line_keys:
             continue
         n = len(lines) + 1
-        lines.append(f"{n}) {sent} ({cit.doc_id}, p{cit.page}, {cit.chunk_id})")
+        lines.append(f"{n}) {sent} ({_citation_label(cit.doc_id, cit.doc_title)}, p{cit.page}, {cit.chunk_id})")
         citations.append(cit)
         selected_scores.append(float(sc))
         used_line_keys.add(line_key)
@@ -1931,6 +1941,7 @@ def _phase_c_debug_sentences(text: str, citations: list[Citation]) -> list[dict[
             {
                 "sentence": sentence,
                 "pdf": cit.doc_id,
+                "citation": _citation_label(cit.doc_id, cit.doc_title),
                 "page": int(cit.page),
                 "chunk_id": cit.chunk_id,
             }
@@ -2065,6 +2076,7 @@ def answer(
         "relevant_facts_kept": [
             {
                 "pdf": f.pdf,
+                "citation": _citation_label(f.pdf, f.doc_title),
                 "page": int(f.page),
                 "chunk_id": f.chunk_id,
             }
@@ -2224,6 +2236,7 @@ def answer(
         "citations": [
             {
                 "pdf": c.doc_id,
+                "citation": _citation_label(c.doc_id, c.doc_title),
                 "page": int(c.page),
                 "chunk_id": c.chunk_id,
             }

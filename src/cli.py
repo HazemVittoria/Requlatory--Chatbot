@@ -66,7 +66,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.show_citations and res.citations:
         print("\nCitations:")
         for c in res.citations:
-            print(f"- {c.doc_id} | page {c.page} | {c.chunk_id}")
+            doc_label = str(getattr(c, "doc_title", "") or c.doc_id)
+            print(f"- {doc_label} | page {c.page} | {c.chunk_id}")
     return 0
 
 

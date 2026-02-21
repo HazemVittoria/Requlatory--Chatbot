@@ -1,0 +1,7 @@
+ANSWER:
+1) Requirement: The effectiveness of CAPAs should be monitored. (trs986annex2.pdf, p12, p12_c1)
+2) Requirement: The most likely root cause(s) should be identified and appropriate corrective actions and/or preventive actions (CAPAs) should be identified and taken. (trs986annex2.pdf, p12, p12_c1)
+CONFIDENCE: Medium
+
+Citations:
+- trs986annex2.pdf | p12 | p12_c1

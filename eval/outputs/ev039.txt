@@ -1,0 +1,7 @@
+ANSWER:
+1) Requirement: Where reduction techniques, such as microfilming, are used, suitable reader and photocopying equipment shall be readily available. (21 CFR 211.180 (up to date as of 2-12-2026).pdf, p1, p1_c3)
+2) Requirement: (2) A review of complaints, recalls, returned or salvaged drug products, and investigations conducted under § . (21 CFR 211.180 (up to date as of 2-12-2026).pdf, p1, p1_c3)
+CONFIDENCE: Medium
+
+Citations:
+- 21 CFR 211.180 (up to date as of 2-12-2026).pdf | p1 | p1_c3

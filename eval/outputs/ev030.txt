@@ -1,0 +1,7 @@
+ANSWER:
+1) Requirement: (I)Determination that persons WHO develop, maintain, or use electronic record/electronic signature systems have the education, training, and experience to perform their assigned tasks. (21-CFR-Part-11-as-of-26Mar2025.pdf, p4, p4_c4)
+2) Requirement: (J)The establishment of, and adherence to, written policies that hold individuals accountable and responsible for actions initiated under their electronic signatures, in order to deter record and signature falsiEcation. (21-CFR-Part-11-as-of-26Mar2025.pdf, p4, p4_c4)
+CONFIDENCE: Medium
+
+Citations:
+- 21-CFR-Part-11-as-of-26Mar2025.pdf | p4 | p4_c4

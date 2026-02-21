@@ -9,6 +9,7 @@ class Citation:
     doc_id: str
     page: int
     chunk_id: str
+    doc_title: str = ""
 
 
 @dataclass(frozen=True)
@@ -18,6 +19,7 @@ class Fact:
     page: int
     chunk_id: str
     score: float
+    doc_title: str = ""
 
 
 @dataclass(frozen=True)

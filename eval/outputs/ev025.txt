@@ -1,0 +1,10 @@
+ANSWER:
+1) Requirement: There should be a documented rationale for the selection of such a method. (trs1033-annex4-guideline-on-data-integrity.pdf, p12, p12_c1)
+2) Requirement: Media use d should be documented and justified for reliability. (PI 011-3 Recommendation on Computerised Systems.pdf, p28, p28_c3)
+3) Requirement: , WHO Expert Committee on Specifications for Pharmaceutical Preparations Fifty-fifth report where risk assessment has shown that this is required to relevant personnel. (trs1033-annex4-guideline-on-data-integrity.pdf, p12, p12_c1)
+4) Requirement: /Head2right All GxP related data, including audit trails should be backed-up. (PI 011-3 Recommendation on Computerised Systems.pdf, p28, p28_c3)
+CONFIDENCE: High
+
+Citations:
+- trs1033-annex4-guideline-on-data-integrity.pdf | p12 | p12_c1
+- PI 011-3 Recommendation on Computerised Systems.pdf | p28 | p28_c3

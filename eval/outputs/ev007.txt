@@ -1,0 +1,8 @@
+ANSWER:
+1) Requirement: During Stage 2, CGMP-compliant procedures must be followed. (Process-Validation--General-Principles-and-Practices.pdf, p13, p13_c2)
+2) Requirement: The degree and type of documentation required by CGMP vary during the validation lifecycle. (Process-Validation--General-Principles-and-Practices.pdf, p20, p20_c1)
+CONFIDENCE: Medium
+
+Citations:
+- Process-Validation--General-Principles-and-Practices.pdf | p13 | p13_c2
+- Process-Validation--General-Principles-and-Practices.pdf | p20 | p20_c1

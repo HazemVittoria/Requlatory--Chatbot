@@ -1,0 +1,7 @@
+ANSWER:
+1) Requirement: Include all appropriate department and quality unit review and approvals. (Process-Validation--General-Principles-and-Practices.pdf, p17, p17_c2)
+2) Requirement: Adherence to the CGMP requirements, specifically, the collection and evaluation of information and data about the performance of the process, will allow detection of undesired process variability. (Process-Validation--General-Principles-and-Practices.pdf, p17, p17_c2)
+CONFIDENCE: Medium
+
+Citations:
+- Process-Validation--General-Principles-and-Practices.pdf | p17 | p17_c2

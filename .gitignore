@@ -1,5 +1,5 @@
-.cache/
+eval_artifacts/
 __pycache__/
 *.pyc
-.pytest_cache/
+.cache/
 data/sops/*.exe

@@ -1,0 +1,8 @@
+ANSWER:
+1) Requirement: During Stage 2, CGMP-compliant procedures must be followed. (Process-Validation--General-Principles-and-Practices.pdf, p13, p13_c2)
+2) Requirement: A manufacturer must successfully complete PPQ before commencing commercial distribution of the drug product. (Process-Validation--General-Principles-and-Practices.pdf, p14, p14_c2)
+CONFIDENCE: Medium
+
+Citations:
+- Process-Validation--General-Principles-and-Practices.pdf | p13 | p13_c2
+- Process-Validation--General-Principles-and-Practices.pdf | p14 | p14_c2

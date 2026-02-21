@@ -1,0 +1,10 @@
+ANSWER:
+1) Requirement: These arrangements ensure that data, irrespective of the process, format or technology in which it is generated, recorded, processed, retained, retrieved and used will ensure a n attributable, legible, contemporaneous,. (PI 041-1 Guidance on Data Integrity.pdf, p5, p5_c3)
+2) Requirement: This guideline should also be read with other WHO good practices guidelines and publications including, but not limited to, those listed in the references section of this document. (trs1033-annex4-guideline-on-data-integrity.pdf, p3, p3_c1)
+3) Requirement: Together, these expectations ensure that events are properly documented and the data can be used to support informed decisions. (PI 041-1 Guidance on Data Integrity.pdf, p15, p15_c2)
+CONFIDENCE: High
+
+Citations:
+- PI 041-1 Guidance on Data Integrity.pdf | p5 | p5_c3
+- trs1033-annex4-guideline-on-data-integrity.pdf | p3 | p3_c1
+- PI 041-1 Guidance on Data Integrity.pdf | p15 | p15_c2
