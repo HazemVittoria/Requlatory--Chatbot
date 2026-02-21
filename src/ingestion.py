@@ -22,6 +22,11 @@ _NUMBERED_HEADING_RE = re.compile(r"^\s*(?:\d+(?:\.\d+){0,4}|[ivxlcdm]{1,8})[.)]
 _ALL_CAPS_HEADING_RE = re.compile(r"^[A-Z0-9][A-Z0-9 \-(),/&]{4,}$")
 _HYPHENATED_END_RE = re.compile(r"[A-Za-z]{2,}-$")
 _TITLE_DROP_RE = re.compile(r"^\s*(?:untitled|document\d*|none|null|na|n/a)\s*$", flags=re.IGNORECASE)
+_SEQ_NUM_LABEL_RE = re.compile(r"^\s*(?:page\s+)?0*(\d{1,6})\s*$", flags=re.IGNORECASE)
+_ROMAN_PAGE_LABEL_RE = re.compile(
+    r"^(?i:(?:i|ii|iii|iv|v|vi|vii|viii|ix|x|xi|xii|xiii|xiv|xv|xvi|xvii|xviii|xix|xx))$"
+)
+_DIGIT_PAGE_LABEL_RE = re.compile(r"^\d{1,4}$")
 
 _GENERIC_TITLE_LINES = {
     "table of contents",
@@ -219,6 +224,201 @@ def _citation_title(reader: PdfReader, page_records: list[dict[str, Any]], fallb
     return str(fallback_name)
 
 
+def _label_to_sequential_int(label: str) -> int | None:
+    m = _SEQ_NUM_LABEL_RE.match(str(label or ""))
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except Exception:
+        return None
+
+
+def _labels_are_trivial(labels: list[str] | None, num_pages: int) -> bool:
+    if labels is None:
+        return True
+    if num_pages <= 0:
+        return True
+    if len(labels) < num_pages:
+        return False
+    for i in range(num_pages):
+        seq = _label_to_sequential_int(str(labels[i] or ""))
+        if seq is None or seq != (i + 1):
+            return False
+    return True
+
+
+def _nonempty_stripped_lines(raw_text: str) -> list[str]:
+    out: list[str] = []
+    for ln in (raw_text or "").splitlines():
+        s = (ln or "").strip()
+        if s:
+            out.append(s)
+    return out
+
+
+def _numeric_page_label_value(label: str | None) -> int | None:
+    s = str(label or "").strip()
+    if not _DIGIT_PAGE_LABEL_RE.match(s):
+        return None
+    try:
+        return int(s)
+    except Exception:
+        return None
+
+
+def _header_digit_page_upper_bound(pdf_index: int) -> int:
+    if int(pdf_index) < 20:
+        return 30
+    return 500
+
+
+def _contains_letters(text: str) -> bool:
+    return any(ch.isalpha() for ch in (text or ""))
+
+
+def _collect_window_candidates_with_positions(
+    lines: list[str],
+    *,
+    pdf_index: int,
+    base_index: int,
+    upper_bound: int | None = None,
+) -> tuple[list[tuple[int, int]], list[tuple[int, str]]]:
+    arabic: list[tuple[int, int]] = []
+    roman: list[tuple[int, str]] = []
+    upper = int(upper_bound) if upper_bound is not None else _header_digit_page_upper_bound(pdf_index)
+    for rel_idx, ln in enumerate(lines):
+        s = _normalize_line(ln).strip()
+        if not s:
+            continue
+        abs_idx = int(base_index + rel_idx)
+        if _ROMAN_PAGE_LABEL_RE.match(s):
+            roman.append((abs_idx, s.lower()))
+            continue
+        if _DIGIT_PAGE_LABEL_RE.match(s):
+            try:
+                val = int(s)
+            except Exception:
+                continue
+            if 1 <= val <= upper:
+                arabic.append((abs_idx, val))
+    return arabic, roman
+
+
+def _collect_window_candidates(lines: list[str], *, pdf_index: int) -> tuple[list[int], list[str]]:
+    a_with_pos, r_with_pos = _collect_window_candidates_with_positions(
+        lines,
+        pdf_index=pdf_index,
+        base_index=0,
+        upper_bound=None,
+    )
+    return [v for _, v in a_with_pos], [v for _, v in r_with_pos]
+
+
+def _derive_page_label_from_text(raw_text: str, *, pdf_index: int) -> tuple[str | None, list[int]]:
+    lines = _nonempty_stripped_lines(raw_text)
+    if not lines:
+        return None, []
+
+    top = lines[:15]
+    bottom = lines[-15:]
+    top_count = len(top)
+
+    bottom_base = max(0, len(lines) - len(bottom))
+    footer_arabic_pos, footer_roman_pos = _collect_window_candidates_with_positions(
+        bottom,
+        pdf_index=pdf_index,
+        base_index=bottom_base,
+        upper_bound=500,
+    )
+
+    guideline_idx = next((i for i, ln in enumerate(lines) if "guideline" in ln.lower()), -1)
+    header_arabic_pos: list[tuple[int, int]] = []
+    header_roman_pos: list[tuple[int, str]] = []
+    if guideline_idx >= 0:
+        header_window = lines[guideline_idx + 1 : guideline_idx + 1 + 8]
+        header_arabic_pos, header_roman_pos = _collect_window_candidates_with_positions(
+            header_window,
+            pdf_index=pdf_index,
+            base_index=(guideline_idx + 1),
+            upper_bound=_header_digit_page_upper_bound(pdf_index),
+        )
+
+    # Reject likely section-number headers (e.g., "3" followed by "Glossary")
+    # when footer candidates exist.
+    if footer_arabic_pos or footer_roman_pos:
+        filtered: list[tuple[int, int]] = []
+        for abs_idx, val in header_arabic_pos:
+            if abs_idx < top_count and val <= 20:
+                next_idx = abs_idx + 1
+                if next_idx < len(lines) and _contains_letters(lines[next_idx]):
+                    continue
+            filtered.append((abs_idx, val))
+        header_arabic_pos = filtered
+
+    all_arabic_candidates = sorted(
+        {
+            int(v)
+            for _, v in [*footer_arabic_pos, *header_arabic_pos]
+        }
+    )
+
+    # Priority 1: footer candidates (bottom window).
+    if footer_arabic_pos:
+        return str(footer_arabic_pos[-1][1]), all_arabic_candidates
+    if footer_roman_pos:
+        return footer_roman_pos[-1][1], all_arabic_candidates
+
+    # Priority 2: header candidates (post-guideline window).
+    if header_arabic_pos:
+        return str(min(v for _, v in header_arabic_pos)), all_arabic_candidates
+    if header_roman_pos:
+        return header_roman_pos[-1][1], all_arabic_candidates
+
+    # Fallback: broad scan with same plausibility bounds.
+    scan = top + ([] if len(lines) <= 15 else bottom)
+    a_with_pos, r_with_pos = _collect_window_candidates_with_positions(
+        scan,
+        pdf_index=pdf_index,
+        base_index=0,
+        upper_bound=500,
+    )
+    arabic = [v for _, v in a_with_pos]
+    roman = [v for _, v in r_with_pos]
+    fallback_arabic = sorted({*all_arabic_candidates, *arabic})
+    if arabic:
+        return str(min(arabic)), fallback_arabic
+    if roman:
+        return roman[-1], fallback_arabic
+    return None, all_arabic_candidates
+
+
+def _smooth_numeric_page_labels(page_records: list[dict[str, Any]]) -> None:
+    if len(page_records) < 3:
+        return
+    for i in range(1, len(page_records) - 1):
+        prev_num = _numeric_page_label_value(page_records[i - 1].get("page_label"))
+        cur_num = _numeric_page_label_value(page_records[i].get("page_label"))
+        next_num = _numeric_page_label_value(page_records[i + 1].get("page_label"))
+        if prev_num is None or next_num is None:
+            continue
+        expected = prev_num + 1
+        if next_num != (expected + 1):
+            continue
+        if cur_num == expected:
+            continue
+        candidates = list(page_records[i].get("_arabic_candidates") or [])
+        choose_expected = False
+        if expected in candidates:
+            choose_expected = True
+        elif cur_num is None:
+            choose_expected = True
+        elif abs(cur_num - expected) >= 10:
+            choose_expected = True
+        if choose_expected:
+            page_records[i]["page_label"] = str(expected)
+
+
 def _build_blocks(lines: list[str]) -> list[dict[str, str]]:
     blocks: list[dict[str, str]] = []
     current_section = "Unknown"
@@ -318,16 +518,40 @@ def ingest_pdf(
     min_chunk_chars: int = 220,
 ) -> list[dict[str, Any]]:
     reader = PdfReader(str(pdf_path))
+    labels: list[str] | None = None
+    try:
+        labels = [str(x or "").strip() for x in list(reader.page_labels)]
+    except Exception:
+        labels = None
+    num_pages = len(reader.pages)
+    trust_pdf_labels = not _labels_are_trivial(labels, num_pages)
     page_records: list[dict[str, Any]] = []
     line_df: Counter[str] = Counter()
 
-    for page_idx, page in enumerate(reader.pages, start=1):
+    for pdf_index, page in enumerate(reader.pages):
         raw_text = page.extract_text() or ""
         lines = _merge_hyphenated_linebreaks(raw_text.splitlines())
-        page_records.append({"page": page_idx, "lines": lines})
+        page_label = None
+        arabic_candidates: list[int] = []
+        if trust_pdf_labels and labels and pdf_index < len(labels):
+            page_label = str(labels[pdf_index] or "").strip() or None
+        if not page_label and not trust_pdf_labels:
+            page_label, arabic_candidates = _derive_page_label_from_text(raw_text, pdf_index=pdf_index)
+        page_records.append(
+            {
+                "pdf_index": int(pdf_index),
+                "page": int(pdf_index + 1),
+                "page_label": page_label,
+                "_arabic_candidates": arabic_candidates,
+                "lines": lines,
+            }
+        )
         seen = {_normalize_for_frequency(ln) for ln in lines}
         seen.discard("")
         line_df.update(seen)
+
+    if not trust_pdf_labels:
+        _smooth_numeric_page_labels(page_records)
 
     min_df = max(2, int(math.ceil(max(1, len(page_records)) * repeat_line_doc_frequency)))
     repeated = {line for line, freq in line_df.items() if freq >= min_df}
@@ -335,7 +559,9 @@ def ingest_pdf(
 
     out: list[dict[str, Any]] = []
     for rec in page_records:
+        pdf_index = int(rec["pdf_index"])
         page = int(rec["page"])
+        page_label = str(rec.get("page_label") or "").strip() or None
         kept_lines = [
             ln
             for ln in rec["lines"]
@@ -359,12 +585,49 @@ def ingest_pdf(
                     "file": pdf_path.name,
                     "citation": citation_title,
                     "source_pdf_name": pdf_path.name,
+                    "pdf_index": pdf_index,
+                    "page_label": page_label,
                     "page": page,
                     "section": chunk.get("section") or "Unknown",
-                    "chunk_id": f"p{page}_c{idx}",
+                    "chunk_id": f"p{pdf_index}_c{idx}",
                     "text": text,
                 }
             )
+    return out
+
+
+def inspect_pdf_page_labels(pdf_path: Path, limit: int = 10) -> list[tuple[int, int, str | None]]:
+    reader = PdfReader(str(pdf_path))
+    labels: list[str] | None = None
+    try:
+        labels = [str(x or "").strip() for x in list(reader.page_labels)]
+    except Exception:
+        labels = None
+    num_pages = len(reader.pages)
+    trust_pdf_labels = not _labels_are_trivial(labels, num_pages)
+    page_records: list[dict[str, Any]] = []
+    max_pages = min(num_pages, max(0, int(limit)))
+    for i in range(max_pages):
+        raw_text = (reader.pages[i].extract_text() or "")
+        label = None
+        arabic_candidates: list[int] = []
+        if trust_pdf_labels and labels and i < len(labels):
+            label = str(labels[i] or "").strip() or None
+        if not label and not trust_pdf_labels:
+            label, arabic_candidates = _derive_page_label_from_text(raw_text, pdf_index=i)
+        page_records.append(
+            {
+                "pdf_index": int(i),
+                "page": int(i + 1),
+                "page_label": label,
+                "_arabic_candidates": arabic_candidates,
+            }
+        )
+    if not trust_pdf_labels:
+        _smooth_numeric_page_labels(page_records)
+    out: list[tuple[int, int, str | None]] = []
+    for rec in page_records:
+        out.append((int(rec["pdf_index"]), int(rec["page"]), rec.get("page_label")))
     return out
 
 

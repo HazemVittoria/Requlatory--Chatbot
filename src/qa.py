@@ -17,7 +17,7 @@ from .phase_llm import (
     llm_phase_available,
 )
 from .query_normalization import expand_query, normalize_text
-from .qa_types import AnswerResult, Citation, Fact
+from .qa_types import AnswerResult, Citation, Fact, display_page_value
 from . import search as search_module
 from .search import search_chunks
 
@@ -269,6 +269,34 @@ def _citation_label(doc_id: str, doc_title: str) -> str:
     return str(doc_id or "").strip()
 
 
+def _chunk_pdf_index(chunk: dict) -> int:
+    raw_idx = chunk.get("pdf_index")
+    if raw_idx is not None:
+        try:
+            idx = int(raw_idx)
+            return idx if idx >= 0 else 0
+        except Exception:
+            pass
+    try:
+        page = int(chunk.get("page") or 0)
+    except Exception:
+        page = 0
+    if page > 0:
+        return page - 1
+    return 0
+
+
+def _chunk_page_label(chunk: dict) -> str | None:
+    return str(chunk.get("page_label") or "").strip() or None
+
+
+def _chunk_display_page(chunk: dict) -> str:
+    return display_page_value(
+        pdf_index=_chunk_pdf_index(chunk),
+        page_label=_chunk_page_label(chunk),
+    )
+
+
 def _intent(question: str) -> str:
     q = (question or "").strip().lower()
     if q.startswith("what is") or q.startswith("define") or "constitutes" in q:
@@ -515,11 +543,17 @@ def _phase_a_chunk_preview(chunks: list[dict]) -> list[dict[str, object]]:
     for c in chunks:
         base_score = float(c.get("_base_score", c.get("_score", 0.0)))
         final_score = float(c.get("_final_score", c.get("_score", 0.0)))
+        pdf_index = _chunk_pdf_index(c)
+        page = int(c.get("page") or (pdf_index + 1))
+        page_label = _chunk_page_label(c)
         out.append(
             {
                 "pdf": str(c.get("file") or ""),
                 "authority": str(c.get("authority") or c.get("source") or "OTHER"),
-                "page": int(c.get("page") or 0),
+                "pdf_index": int(pdf_index),
+                "page_label": page_label,
+                "page": int(page),
+                "display_page": _chunk_display_page(c),
                 "chunk_id": str(c.get("chunk_id") or ""),
                 "score": float(c.get("_score", 0.0)),
                 "base_score": base_score,
@@ -535,7 +569,7 @@ def _phase_a_chunk_preview(chunks: list[dict]) -> list[dict[str, object]]:
 def _chunk_key(chunk: dict) -> tuple[str, int, str]:
     return (
         str(chunk.get("file") or ""),
-        int(chunk.get("page") or 0),
+        _chunk_pdf_index(chunk),
         str(chunk.get("chunk_id") or ""),
     )
 
@@ -544,7 +578,7 @@ def _chunk_sort_key(chunk: dict) -> tuple[float, str, int, str]:
     return (
         -float(chunk.get("_final_score", chunk.get("_score", 0.0))),
         str(chunk.get("file") or ""),
-        int(chunk.get("page") or 0),
+        _chunk_pdf_index(chunk),
         str(chunk.get("chunk_id") or ""),
     )
 
@@ -766,7 +800,7 @@ def _collect_retrieved_chunks_for_queries(
         if empty_retrieval_events is not None:
             empty_retrieval_events.extend(search_module.pop_empty_retrieval_events())
         for c in hits:
-            key = (str(c.get("file") or ""), int(c.get("page") or 0), str(c.get("chunk_id") or ""))
+            key = (str(c.get("file") or ""), _chunk_pdf_index(c), str(c.get("chunk_id") or ""))
             prev = merged.get(key)
             if prev is None or float(c.get("_score", 0.0)) > float(prev.get("_score", 0.0)):
                 merged[key] = c
@@ -775,7 +809,7 @@ def _collect_retrieved_chunks_for_queries(
         key=lambda x: (
             -float(x.get("_score", 0.0)),
             str(x.get("file") or ""),
-            int(x.get("page") or 0),
+            _chunk_pdf_index(x),
             str(x.get("chunk_id") or ""),
         ),
     )
@@ -835,7 +869,7 @@ def _retrieve_chunks_for_queries(
         pool_size_attempt2 = int(len(attempt2_chunks))
         merged_chunks: dict[tuple[str, int, str], dict] = {}
         for c in top_chunks + attempt2_chunks:
-            key = (str(c.get("file") or ""), int(c.get("page") or 0), str(c.get("chunk_id") or ""))
+            key = (str(c.get("file") or ""), _chunk_pdf_index(c), str(c.get("chunk_id") or ""))
             prev = merged_chunks.get(key)
             if prev is None or float(c.get("_score", 0.0)) > float(prev.get("_score", 0.0)):
                 merged_chunks[key] = c
@@ -844,7 +878,7 @@ def _retrieve_chunks_for_queries(
             key=lambda x: (
                 -float(x.get("_score", 0.0)),
                 str(x.get("file") or ""),
-                int(x.get("page") or 0),
+                _chunk_pdf_index(x),
                 str(x.get("chunk_id") or ""),
             ),
         )[:PHASE_A_BALANCE_POOL_CHUNKS]
@@ -904,7 +938,7 @@ def format_facts(facts: list[Fact]) -> str:
     lines = ["FACTS:"]
     for f in facts:
         lines.append(
-            f'- "{f.quote}" (pdf="{f.pdf}", page={f.page}, chunk_id="{f.chunk_id}", score={f.score:.4f})'
+            f'- "{f.quote}" ({f.pdf} | {f.display_page} | {f.chunk_id}, score={f.score:.4f})'
         )
     return "\n".join(lines)
 
@@ -912,7 +946,7 @@ def format_facts(facts: list[Fact]) -> str:
 def format_relevant_facts(facts: list[Fact]) -> str:
     lines = ["RELEVANT FACTS:"]
     for f in facts:
-        lines.append(f'- "{f.quote}" (pdf="{f.pdf}", page={f.page}, chunk_id="{f.chunk_id}")')
+        lines.append(f'- "{f.quote}" ({f.pdf} | {f.display_page} | {f.chunk_id})')
     return "\n".join(lines)
 
 
@@ -1103,10 +1137,12 @@ def _phase_a_retrieval(
             Fact(
                 quote=str(c.get("text") or ""),
                 pdf=pdf_name,
-                page=int(c.get("page") or 0),
+                page=int(_chunk_pdf_index(c) + 1),
                 chunk_id=str(c.get("chunk_id") or ""),
                 score=float(c.get("_score", 0.0)),
                 doc_title=_citation_label(pdf_name, citation_title),
+                pdf_index=_chunk_pdf_index(c),
+                page_label=_chunk_page_label(c),
             )
         )
     trace = {
@@ -1169,7 +1205,7 @@ def _requires_external_live_data(question: str) -> bool:
 
 
 def _phase_b_filter(question: str, facts: list[Fact]) -> list[Fact]:
-    ordered = sorted(facts, key=lambda x: (-x.score, x.pdf, x.page, x.chunk_id))
+    ordered = sorted(facts, key=lambda x: (-x.score, x.pdf, int(x.pdf_index), x.chunk_id))
     out: list[Fact] = []
     seen_keys: set[str] = set()
     for f in ordered:
@@ -1204,12 +1240,12 @@ def _phase_b_empty_reason_summary(
             continue
         k = (
             str(row.get("pdf") or ""),
-            int(row.get("page") or 0),
+            _chunk_pdf_index(row),
             str(row.get("chunk_id") or ""),
         )
         row_index[k] = row
 
-    ordered = sorted(phase_a_facts, key=lambda x: (-x.score, x.pdf, x.page, x.chunk_id))
+    ordered = sorted(phase_a_facts, key=lambda x: (-x.score, x.pdf, int(x.pdf_index), x.chunk_id))
     requirement_pass = [f for f in ordered if _phase_b_has_requirement_language(f.quote)]
     validation_gate = _phase_b_validation_gate_active(question)
     if validation_gate:
@@ -1219,12 +1255,15 @@ def _phase_b_empty_reason_summary(
 
     top_candidates: list[dict[str, object]] = []
     for f in ordered[:5]:
-        k = (f.pdf, int(f.page), f.chunk_id)
+        k = (f.pdf, int(f.pdf_index), f.chunk_id)
         meta = row_index.get(k, {})
         top_candidates.append(
             {
                 "pdf": f.pdf,
+                "pdf_index": int(f.pdf_index),
+                "page_label": f.page_label,
                 "page": int(f.page),
+                "display_page": f.display_page,
                 "chunk_id": f.chunk_id,
                 "authority": str(meta.get("authority") or "OTHER"),
                 "base_score": float(meta.get("base_score", f.score)),
@@ -1596,7 +1635,14 @@ def _phase_c_sentence_candidates(
     reasons_domain: list[str] = []
     per_fact_limit = 2 if len(selected_facts) > 1 else 3
     for f in selected_facts:
-        cit = Citation(doc_id=f.pdf, page=f.page, chunk_id=f.chunk_id, doc_title=f.doc_title)
+        cit = Citation(
+            doc_id=f.pdf,
+            page=int(f.pdf_index) + 1,
+            chunk_id=f.chunk_id,
+            doc_title=f.doc_title,
+            pdf_index=f.pdf_index,
+            page_label=f.page_label,
+        )
         extracted, stage_counts, stage_reasons = _extract_clean_requirement_sentences_with_trace(
             f.quote,
             max_items=per_fact_limit,
@@ -1710,7 +1756,7 @@ def _select_phase_c_facts(relevant: list[Fact], *, case_id: str | None = None) -
             0 if _has_requirement_language(f.quote) else 1,
             -float(f.score),
             f.pdf,
-            f.page,
+            int(f.pdf_index),
             f.chunk_id,
         ),
     )
@@ -1726,7 +1772,7 @@ def _select_phase_c_facts(relevant: list[Fact], *, case_id: str | None = None) -
             clean_len = len(cleaned)
             clean_preview = repr(cleaned[:180])
             print(
-                f"[CHUNK] file={f.pdf} page={int(f.page)} id={f.chunk_id} "
+                f"[CHUNK] file={f.pdf} page={f.display_page} id={f.chunk_id} "
                 f"raw_type={raw_type} raw_len={raw_len} clean_len={clean_len} "
                 f"raw_preview={raw_preview} clean_preview={clean_preview}"
             )
@@ -1850,11 +1896,13 @@ def _phase_c_synthesis(
             break
         if doc_counts.get(cit.doc_id, 0) >= 1:
             continue
-        line_key = (cit.doc_id, int(cit.page), cit.chunk_id, sent.lower())
+        line_key = (cit.doc_id, int(cit.pdf_index), cit.chunk_id, sent.lower())
         if line_key in used_line_keys:
             continue
         n = len(lines) + 1
-        lines.append(f"{n}) {sent} ({_citation_label(cit.doc_id, cit.doc_title)}, p{cit.page}, {cit.chunk_id})")
+        lines.append(
+            f"{n}) {sent} ({_citation_label(cit.doc_id, cit.doc_title)} | {cit.display_page} | {cit.chunk_id})"
+        )
         citations.append(cit)
         selected_scores.append(float(sc))
         used_line_keys.add(line_key)
@@ -1866,11 +1914,13 @@ def _phase_c_synthesis(
             break
         if doc_counts.get(cit.doc_id, 0) >= DETERMINISTIC_MAX_SENTENCES_PER_DOC:
             continue
-        line_key = (cit.doc_id, int(cit.page), cit.chunk_id, sent.lower())
+        line_key = (cit.doc_id, int(cit.pdf_index), cit.chunk_id, sent.lower())
         if line_key in used_line_keys:
             continue
         n = len(lines) + 1
-        lines.append(f"{n}) {sent} ({_citation_label(cit.doc_id, cit.doc_title)}, p{cit.page}, {cit.chunk_id})")
+        lines.append(
+            f"{n}) {sent} ({_citation_label(cit.doc_id, cit.doc_title)} | {cit.display_page} | {cit.chunk_id})"
+        )
         citations.append(cit)
         selected_scores.append(float(sc))
         used_line_keys.add(line_key)
@@ -1911,7 +1961,7 @@ def _dedupe_citations_stable(
     out: list[Citation] = []
     seen: set[tuple[str, int, str]] = set()
     for c in citations:
-        key = (str(c.doc_id), int(c.page), str(c.chunk_id))
+        key = (str(c.doc_id), int(c.pdf_index), str(c.chunk_id))
         if key in seen:
             continue
         seen.add(key)
@@ -1942,7 +1992,10 @@ def _phase_c_debug_sentences(text: str, citations: list[Citation]) -> list[dict[
                 "sentence": sentence,
                 "pdf": cit.doc_id,
                 "citation": _citation_label(cit.doc_id, cit.doc_title),
+                "pdf_index": int(cit.pdf_index),
+                "page_label": cit.page_label,
                 "page": int(cit.page),
+                "display_page": cit.display_page,
                 "chunk_id": cit.chunk_id,
             }
         )
@@ -2077,7 +2130,10 @@ def answer(
             {
                 "pdf": f.pdf,
                 "citation": _citation_label(f.pdf, f.doc_title),
+                "pdf_index": int(f.pdf_index),
+                "page_label": f.page_label,
                 "page": int(f.page),
+                "display_page": f.display_page,
                 "chunk_id": f.chunk_id,
             }
             for f in relevant
@@ -2237,7 +2293,10 @@ def answer(
             {
                 "pdf": c.doc_id,
                 "citation": _citation_label(c.doc_id, c.doc_title),
+                "pdf_index": int(c.pdf_index),
+                "page_label": c.page_label,
                 "page": int(c.page),
+                "display_page": c.display_page,
                 "chunk_id": c.chunk_id,
             }
             for c in citations

@@ -12,9 +12,9 @@ def test_fact_contract_formatters():
     ftxt = format_facts(facts)
     rtxt = format_relevant_facts(facts)
     assert ftxt.startswith("FACTS:")
-    assert '(pdf="Q9.pdf", page=9, chunk_id="p9_c1", score=0.7100)' in ftxt
+    assert '(Q9.pdf | 9 | p9_c1, score=0.7100)' in ftxt
     assert rtxt.startswith("RELEVANT FACTS:")
-    assert '(pdf="Q9.pdf", page=9, chunk_id="p9_c1")' in rtxt
+    assert '(Q9.pdf | 9 | p9_c1)' in rtxt
 
 
 def test_phase_c_requires_cited_sentences():
@@ -37,9 +37,25 @@ def test_phase_c_requires_cited_sentences():
     text, cits = _phase_c_synthesis("what is risk management", facts)
     assert text.startswith("ANSWER:")
     assert "1) " in text
-    assert "(Q9.pdf, p9, p9_c2)" in text or "(Q9.pdf, p10, p10_c1)" in text
+    assert "(Q9.pdf | 9 | p9_c2)" in text or "(Q9.pdf | 10 | p10_c1)" in text
     assert "CONFIDENCE:" in text
     assert len(cits) >= 1
+
+
+def test_fact_formatter_prefers_page_label():
+    facts = [
+        Fact(
+            quote="Example requirement text.",
+            pdf="Annex.pdf",
+            page=15,
+            chunk_id="p15_c1",
+            score=0.5,
+            pdf_index=14,
+            page_label="A-3",
+        )
+    ]
+    ftxt = format_facts(facts)
+    assert "(Annex.pdf | A-3 | p15_c1, score=0.5000)" in ftxt
 
 
 def test_not_found_message_shape(monkeypatch):

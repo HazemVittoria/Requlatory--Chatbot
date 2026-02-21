@@ -278,12 +278,12 @@ def _enforce_phase_b_requirement_filter(
     if filtered and validation_gate:
         docs = {f.pdf for f in filtered}
         if len(docs) == 1:
-            selected_ids = {(f.pdf, int(f.page), f.chunk_id) for f in filtered}
+            selected_ids = {(f.pdf, int(f.pdf_index), f.chunk_id) for f in filtered}
             pool = list(source_facts or facts)
             candidates = [
                 f
                 for f in pool
-                if (f.pdf, int(f.page), f.chunk_id) not in selected_ids
+                if (f.pdf, int(f.pdf_index), f.chunk_id) not in selected_ids
                 and f.pdf not in docs
                 and not _is_boilerplate_quote(f.quote)
                 and _has_requirement_language(f.quote)
@@ -495,7 +495,7 @@ def _validate_relevant_facts(obj: dict[str, Any], source_facts: list[Fact], ques
     if not isinstance(rows, list):
         raise ValueError("phase_b invalid schema: relevant_facts must be a list")
 
-    source_index = {(f.pdf, int(f.page), f.chunk_id): f for f in source_facts}
+    source_index = {(f.pdf, int(f.pdf_index), f.chunk_id): f for f in source_facts}
     out: list[Fact] = []
     seen: set[tuple[str, int, str]] = set()
 
@@ -508,7 +508,8 @@ def _validate_relevant_facts(obj: dict[str, Any], source_facts: list[Fact], ques
             page = int(row.get("page"))
         except Exception:
             continue
-        key = (pdf, page, chunk_id)
+        pdf_index = max(0, page - 1)
+        key = (pdf, pdf_index, chunk_id)
         if key in seen or key not in source_index:
             continue
         src = source_index[key]
@@ -517,10 +518,12 @@ def _validate_relevant_facts(obj: dict[str, Any], source_facts: list[Fact], ques
             Fact(
                 quote=quote,
                 pdf=pdf,
-                page=page,
+                page=int(src.pdf_index) + 1,
                 chunk_id=chunk_id,
                 score=float(src.score),
                 doc_title=src.doc_title,
+                pdf_index=int(src.pdf_index),
+                page_label=src.page_label,
             )
         )
         seen.add(key)
@@ -547,7 +550,7 @@ def _validate_synthesis(
     if not isinstance(rows, list):
         raise ValueError("phase_c invalid schema: answer_sentences must be a list")
 
-    rel_index = {(f.pdf, int(f.page), f.chunk_id): f for f in relevant_facts}
+    rel_index = {(f.pdf, int(f.pdf_index), f.chunk_id): f for f in relevant_facts}
     lines: list[str] = []
     cits: list[Citation] = []
     used: set[tuple[str, int, str]] = set()
@@ -570,7 +573,8 @@ def _validate_synthesis(
             continue
         if _looks_like_heading(sentence):
             continue
-        key = (pdf, page, chunk_id)
+        pdf_index = max(0, page - 1)
+        key = (pdf, pdf_index, chunk_id)
         if key in used or key not in rel_index:
             continue
         src = rel_index[key]
@@ -578,9 +582,18 @@ def _validate_synthesis(
         if _is_quote_dump(sentence, src_quote):
             continue
         lines.append(
-            f"{len(lines)+1}) {sentence} ({_citation_label(pdf, src.doc_title)}, p{page}, {chunk_id})"
+            f"{len(lines)+1}) {sentence} ({_citation_label(pdf, src.doc_title)} | {src.display_page} | {chunk_id})"
         )
-        cits.append(Citation(doc_id=pdf, page=page, chunk_id=chunk_id, doc_title=src.doc_title))
+        cits.append(
+            Citation(
+                doc_id=pdf,
+                page=int(src.pdf_index) + 1,
+                chunk_id=chunk_id,
+                doc_title=src.doc_title,
+                pdf_index=int(src.pdf_index),
+                page_label=src.page_label,
+            )
+        )
         used.add(key)
 
     if not lines:

@@ -10,6 +10,7 @@ import re
 
 from .index_integrity import validate_index_integrity
 from .qa import answer
+from .qa_types import display_page_value
 
 NOT_FOUND_TEXT = "Not found in provided PDFs"
 FALLBACK_USED_RATE_ANSWERABLE_MAX = 0.15
@@ -106,6 +107,34 @@ def _norm_authority(v: str) -> str:
     return s or "OTHER"
 
 
+def _citation_pdf_index(c: Any) -> int:
+    raw_idx = getattr(c, "pdf_index", None)
+    if raw_idx is not None:
+        try:
+            idx = int(raw_idx)
+            return idx if idx >= 0 else 0
+        except Exception:
+            pass
+    try:
+        page = int(getattr(c, "page", 0) or 0)
+    except Exception:
+        page = 0
+    if page > 0:
+        return page - 1
+    return 0
+
+
+def _citation_page_label(c: Any) -> str | None:
+    return str(getattr(c, "page_label", "") or "").strip() or None
+
+
+def _citation_display_page(c: Any) -> str:
+    return display_page_value(
+        pdf_index=_citation_pdf_index(c),
+        page_label=_citation_page_label(c),
+    )
+
+
 def _phase_a_active_attempt(phase_a: dict[str, Any]) -> dict[str, Any]:
     attempts = list(phase_a.get("attempts", []) or [])
     if not attempts:
@@ -167,7 +196,13 @@ def _write_failure_artifact(
         phase_b["relevant_facts_kept"] = [
             {
                 "pdf": f.pdf,
+                "pdf_index": int(getattr(f, "pdf_index", 0) or 0),
+                "page_label": str(getattr(f, "page_label", "") or "").strip() or None,
                 "page": int(f.page),
+                "display_page": display_page_value(
+                    pdf_index=int(getattr(f, "pdf_index", 0) or 0),
+                    page_label=str(getattr(f, "page_label", "") or "").strip() or None,
+                ),
                 "chunk_id": f.chunk_id,
             }
             for f in (getattr(res, "relevant_facts", []) or [])
@@ -180,7 +215,10 @@ def _write_failure_artifact(
             {
                 "pdf": c.doc_id,
                 "citation": str(getattr(c, "doc_title", "") or c.doc_id),
-                "page": int(c.page),
+                "pdf_index": _citation_pdf_index(c),
+                "page_label": _citation_page_label(c),
+                "page": int(getattr(c, "page", 0) or 0),
+                "display_page": _citation_display_page(c),
                 "chunk_id": c.chunk_id,
             }
             for c in (getattr(res, "citations", []) or [])
@@ -220,10 +258,10 @@ def _cited_sources(citations: list[Any]) -> list[str]:
     out: list[str] = []
     for c in citations:
         doc = str(getattr(c, "doc_id", "") or "").strip()
-        page = int(getattr(c, "page", 0) or 0)
-        if not doc or page <= 0:
+        display_page = _citation_display_page(c)
+        if not doc or not display_page or display_page == "?":
             continue
-        key = f"{doc}:{page}"
+        key = f"{doc}:{display_page}"
         if key in seen:
             continue
         seen.add(key)
@@ -510,7 +548,7 @@ def run_baseline_eval(
                     for cit in citations:
                         doc_label = str(getattr(cit, "doc_title", "") or getattr(cit, "doc_id", ""))
                         out_lines.append(
-                            f"- {doc_label} | p{int(getattr(cit, 'page', 0) or 0)} | {getattr(cit, 'chunk_id', '')}"
+                            f"- {doc_label} | {_citation_display_page(cit)} | {getattr(cit, 'chunk_id', '')}"
                         )
                 else:
                     out_lines.append("- none")
@@ -624,9 +662,10 @@ def run_eval(golden_path: Path = Path("golden_set.jsonl")) -> dict[str, Any]:
                 "fail_reasons": fail_reasons,
                 "phase_a_fallback_used": phase_a_fallback_used,
                 "answer": text,
-                "citations": [f"{x.doc_id}|p{x.page}|{x.chunk_id}" for x in citations],
+                "citations": [f"{x.doc_id}|{_citation_display_page(x)}|{x.chunk_id}" for x in citations],
                 "citations_display": [
-                    f"{str(getattr(x, 'doc_title', '') or x.doc_id)}|p{x.page}|{x.chunk_id}" for x in citations
+                    f"{str(getattr(x, 'doc_title', '') or x.doc_id)}|{_citation_display_page(x)}|{x.chunk_id}"
+                    for x in citations
                 ],
             }
         )

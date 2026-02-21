@@ -5,8 +5,10 @@ Terminal-first QA over regulatory PDF files organized by authority folders under
 ## What It Does
 - Reads PDFs from authority folders (for example: `fda/`, `ich/`, `ema/`).
 - Extracts and chunks text with page + section metadata.
+- Stores both `pdf_index` (0-based file order) and `page_label` (logical printed page label when present).
 - Builds a cached TF-IDF retrieval index.
 - Answers questions with grounded citations.
+- Citation display prefers PDF `page_label`; fallback is viewer page (`pdf_index + 1`).
 - Evaluates quickly using `golden_set.jsonl`.
 
 ## Determinism Policy (LLM Layer)
@@ -46,6 +48,8 @@ Terminal-first QA over regulatory PDF files organized by authority folders under
   - `python -m src.cli --rebuild-index "What is data integrity?"`
 - JSON output:
   - `python -m src.cli --json "How should deviations be handled?"`
+- Inspect PDF page labels:
+  - `python -m src.cli --inspect-page-labels data/ich/ICH_Q9.pdf --inspect-limit 10`
 
 ## Useful Options
 - `--scope MIXED|FDA|EMA|ICH|SOPS`

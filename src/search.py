@@ -14,7 +14,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 from .ingestion import build_corpus
 
 _CACHE_FILE = Path(".cache") / "retrieval_index.pkl"
-_CACHE_VERSION = "v4-filename-citation"
+_CACHE_VERSION = "v6-page-labels-chunkid"
+_CHUNK_ID_RE = re.compile(r"^p(-?\d+)_c(\d+)$")
 
 _TOKEN_RE = re.compile(r"[a-zA-Z]{3,}")
 _BROAD_REQUIREMENT_INCLUDE_TERMS = (
@@ -163,6 +164,112 @@ def _cache_meta(data_dir: Path, chunk_chars: int, min_chunk_chars: int) -> dict[
     }
 
 
+def _chunk_pdf_index(chunk: dict[str, Any]) -> int:
+    try:
+        raw_idx = chunk.get("pdf_index")
+    except Exception:
+        raw_idx = None
+    if raw_idx is not None:
+        try:
+            idx = int(raw_idx)
+            return idx if idx >= 0 else 0
+        except Exception:
+            pass
+    try:
+        page = int(chunk.get("page") or 0)
+    except Exception:
+        page = 0
+    if page > 0:
+        return page
+    try:
+        chunk_id = str(chunk.get("chunk_id") or "")
+    except Exception:
+        chunk_id = ""
+    m = _CHUNK_ID_RE.match(chunk_id)
+    if m:
+        try:
+            cidx = int(m.group(1))
+            return cidx if cidx >= 0 else 0
+        except Exception:
+            return 0
+    return 0
+
+
+def _chunk_id_page_component(chunk_id: str) -> int | None:
+    m = _CHUNK_ID_RE.match(str(chunk_id or ""))
+    if not m:
+        return None
+    try:
+        out = int(m.group(1))
+    except Exception:
+        return None
+    return out if out >= 0 else 0
+
+
+def _chunk_id_seq_component(chunk_id: str) -> int:
+    m = _CHUNK_ID_RE.match(str(chunk_id or ""))
+    if not m:
+        return 1
+    try:
+        seq = int(m.group(2))
+    except Exception:
+        seq = 1
+    return seq if seq > 0 else 1
+
+
+def _rebuild_chunk_id(*, pdf_index: int, chunk_id: str) -> str:
+    return f"p{int(max(0, pdf_index))}_c{_chunk_id_seq_component(chunk_id)}"
+
+
+def _chunk_id_matches_pdf_index(chunk: dict[str, Any]) -> bool:
+    idx = _chunk_pdf_index(chunk)
+    cid = _chunk_id_page_component(str(chunk.get("chunk_id") or ""))
+    if cid is None:
+        return False
+    return int(cid) == int(idx)
+
+
+def _corpus_has_chunk_id_mismatch(corpus: Any) -> bool:
+    if not isinstance(corpus, list):
+        return True
+    for row in corpus:
+        if not isinstance(row, dict):
+            continue
+        if not _chunk_id_matches_pdf_index(row):
+            return True
+    return False
+
+
+def _migrate_chunk(chunk: dict[str, Any]) -> dict[str, Any]:
+    out = dict(chunk)
+    idx = _chunk_pdf_index(out)
+    out["pdf_index"] = int(idx)
+    try:
+        page = int(out.get("page") or 0)
+    except Exception:
+        page = 0
+    if page <= 0:
+        out["page"] = int(idx + 1)
+    else:
+        out["page"] = int(page)
+    out["page_label"] = str(out.get("page_label") or "").strip() or None
+    out["chunk_id"] = _rebuild_chunk_id(
+        pdf_index=int(out["pdf_index"]),
+        chunk_id=str(out.get("chunk_id") or ""),
+    )
+    return out
+
+
+def _migrate_corpus(corpus: Any) -> list[dict[str, Any]] | None:
+    if not isinstance(corpus, list):
+        return None
+    out: list[dict[str, Any]] = []
+    for row in corpus:
+        if isinstance(row, dict):
+            out.append(_migrate_chunk(row))
+    return out
+
+
 def _load_cache(meta: dict[str, Any]) -> bool:
     global _CORPUS, _VECT_WORD, _VECT_CHAR, _X_WORD, _X_CHAR
     if not _CACHE_FILE.exists():
@@ -173,7 +280,15 @@ def _load_cache(meta: dict[str, Any]) -> bool:
         return False
     if not isinstance(payload, dict) or payload.get("meta") != meta:
         return False
-    _CORPUS = payload.get("corpus")
+    raw_corpus = payload.get("corpus")
+    if _corpus_has_chunk_id_mismatch(raw_corpus):
+        return False
+    migrated_corpus = _migrate_corpus(raw_corpus)
+    if migrated_corpus is None:
+        return False
+    if _corpus_has_chunk_id_mismatch(migrated_corpus):
+        return False
+    _CORPUS = migrated_corpus
     _VECT_WORD = payload.get("vect_word")
     _VECT_CHAR = payload.get("vect_char")
     _X_WORD = payload.get("x_word")
@@ -201,7 +316,8 @@ def rebuild_index(data_dir: Path, chunk_chars: int = 1000, min_chunk_chars: int 
     if not force and _load_cache(meta):
         return
 
-    _CORPUS = build_corpus(data_dir=data_dir, chunk_chars=chunk_chars, min_chunk_chars=min_chunk_chars)
+    built = build_corpus(data_dir=data_dir, chunk_chars=chunk_chars, min_chunk_chars=min_chunk_chars)
+    _CORPUS = [_migrate_chunk(c) for c in built if isinstance(c, dict)]
     texts = [(c.get("text") or "") for c in _CORPUS]
     _VECT_WORD = TfidfVectorizer(stop_words="english", ngram_range=(1, 2), min_df=1)
     _VECT_CHAR = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), min_df=1)
@@ -256,7 +372,7 @@ def _requirement_signal_boost(hits: int) -> float:
 def _candidate_tie_break_key(c: dict[str, Any]) -> tuple[str, int, str]:
     return (
         str(c.get("file") or ""),
-        int(c.get("page") or 0),
+        _chunk_pdf_index(c),
         str(c.get("chunk_id") or ""),
     )
 
